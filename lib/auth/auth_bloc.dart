@@ -71,6 +71,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   static const noConnection = 'Pas de connexion';
   static const otherError = 'Erreur, réessayez';
 
+  static const _storageTimeout = Duration(seconds: 5);
+  static const _logoutTimeout = Duration(seconds: 3);
+
   final CmApi _api;
   final TokenStore _store;
   final PushService _push;
@@ -79,17 +82,18 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     String? token;
     String? username;
     try {
-      token = await _store.read();
-      username = await _store.readUsername();
+      token = await _store.read().timeout(_storageTimeout);
+      username = await _store.readUsername().timeout(_storageTimeout);
     } on Object {
-      // Unreadable secure storage: ask for a new login.
-    } finally {
-      emit(
-        token != null && username != null
-            ? Authenticated(username)
-            : const Unauthenticated(),
-      );
+      // Unreadable or stuck secure storage: ask for a new login.
     }
+    if (token == null || username == null) {
+      emit(const Unauthenticated());
+      return;
+    }
+    emit(Authenticated(username));
+    // Topic subscribe is safe to repeat on every start.
+    await _quietly(_push.subscribe);
   }
 
   Future<void> _onLoginSubmitted(
@@ -123,24 +127,21 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     LogoutRequested event,
     Emitter<AuthState> emit,
   ) async {
-    try {
-      await _quietly(_api.logout);
-      await _quietly(_store.delete);
-      await _quietly(_push.unsubscribe);
-    } finally {
-      emit(const Unauthenticated());
-    }
+    // Before the delete: logout still needs the bearer token.
+    await _quietly(() => _api.logout().timeout(_logoutTimeout));
+    await _quietly(_store.delete);
+    await _quietly(_push.unsubscribe);
+    emit(const Unauthenticated());
   }
 
   Future<void> _onSessionExpired(
     SessionExpired event,
     Emitter<AuthState> emit,
   ) async {
-    try {
-      await _quietly(_store.delete);
-    } finally {
-      emit(const Unauthenticated());
-    }
+    // A late 401 must not delete the token of a fresh login.
+    if (state is! Authenticated) return;
+    await _quietly(_store.delete);
+    emit(const Unauthenticated());
     await _quietly(_push.unsubscribe);
   }
 
