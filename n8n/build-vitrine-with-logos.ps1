@@ -1,4 +1,4 @@
-# Convert logos to base64 data URIs and rebuild vitrine workflow (with downscaled icon)
+# Convert logos to base64 data URIs, replace placeholders, rebuild vitrine workflow
 $ErrorActionPreference = 'Stop'
 $dir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Add-Type -AssemblyName System.Drawing
@@ -46,7 +46,7 @@ function ResizeAndDataUri($srcPath, $maxDim) {
     "data:$mime;base64,$b64"
 }
 
-# App icon: downscale to 128px max (used at 34x34 nav, 84x84 hero, favicon)
+# App icon: downscale to 128px max
 $appIcon = ResizeAndDataUri "$dir\..\assets\logo\icon_1024.png" 128
 # Microzed logo: already small (200x200, 4.6KB), keep as-is
 $microzedLogo = ConvertTo-DataUri "$dir\..\assets\logo\microzed.jpeg"
@@ -58,19 +58,14 @@ Write-Host "Microzed logo data URI length: $($microzedLogo.Length)"
 $jsPath = Join-Path $dir 'vitrine.js'
 $js = Get-Content -Raw -Path $jsPath -Encoding UTF8
 
-# Replace placeholders with real data URIs
+# Replace placeholders with real values
 $js2 = $js -replace '__APP_ICON__', $appIcon
-
-$nl = [environment]::NewLine
-$heroLogoImg = '<img class="hero-logo" src="' + $appIcon + '" alt="Z-Smart-CM logo">'
-$js2 = $js2 -replace '<div class="hero-visual">', ('<div class="hero-visual">' + $nl + $heroLogoImg)
-
-$microzedImgTag = 'src="' + $microzedLogo + '"'
-$js2 = $js2 -replace 'src="assets/logo/microzed.jpeg"', $microzedImgTag
+$js2 = $js2 -replace '__MICROZED_LOGO__', $microzedLogo
+$js2 = $js2 -replace '__DOWNLOAD_URL__', 'https://n8ntest.microzed.tn/webhook/z-smart-cm-download'
 
 # Write updated vitrine.js
 [System.IO.File]::WriteAllText($jsPath, $js2, (New-Object System.Text.UTF8Encoding($false)))
-Write-Host "vitrine.js updated"
+Write-Host "vitrine.js updated with embedded logos and download URL"
 
 # Regenerate workflow JSON
 $template = @'
