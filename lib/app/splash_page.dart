@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:cm_app/app/credit_line.dart';
 import 'package:cm_app/app/strings.dart';
 import 'package:cm_app/app/theme.dart';
@@ -20,12 +18,13 @@ class _SplashPageState extends State<SplashPage>
     duration: const Duration(milliseconds: 900),
   );
   // Icon: first 600 ms. Wordmark: last 300 ms.
-  late final _scale = Tween<double>(begin: 0.8, end: 1).animate(
-    CurvedAnimation(
-      parent: _controller,
-      curve: const Interval(0, 2 / 3, curve: Curves.easeOutBack),
-    ),
-  );
+  late final Animation<double> _scale = Tween<double>(begin: 0.8, end: 1)
+      .animate(
+        CurvedAnimation(
+          parent: _controller,
+          curve: const Interval(0, 2 / 3, curve: Curves.easeOutBack),
+        ),
+      );
   late final _iconFade = CurvedAnimation(
     parent: _controller,
     curve: const Interval(0, 2 / 3, curve: Curves.easeOut),
@@ -44,7 +43,7 @@ class _SplashPageState extends State<SplashPage>
     if (MediaQuery.disableAnimationsOf(context)) {
       _controller.value = 1;
     } else {
-      unawaited(_controller.forward());
+      _controller.forward();
     }
   }
 
