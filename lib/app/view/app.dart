@@ -6,6 +6,8 @@ import 'package:cm_app/app/strings.dart';
 import 'package:cm_app/app/theme.dart';
 import 'package:cm_app/auth/auth_bloc.dart';
 import 'package:cm_app/auth/token_store.dart';
+import 'package:cm_app/demo/demo.dart';
+import 'package:cm_app/demo/fake_cm_api.dart';
 import 'package:cm_app/l10n/l10n.dart';
 import 'package:cm_app/push/push_service.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -31,11 +33,17 @@ class App extends StatelessWidget {
         RepositoryProvider<CmApi>(
           create: (context) =>
               api ??
-              CmApi(http.Client(), token: context.read<TokenStore>().read),
+              (kDemo
+                  ? FakeCmApi()
+                  : CmApi(
+                      http.Client(),
+                      token: context.read<TokenStore>().read,
+                    )),
         ),
         RepositoryProvider<PushService>(
           // bootstrap passes the real service; null (tests) means no push.
-          create: (_) => push ?? const NoopPushService(),
+          create: (_) =>
+              kDemo ? const NoopPushService() : push ?? const NoopPushService(),
         ),
       ],
       child: BlocProvider(
@@ -169,6 +177,13 @@ class _AppViewState extends State<_AppView> {
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       routerConfig: _router,
+      builder: kDemo
+          ? (context, child) => Banner(
+              message: 'MODE DÉMO',
+              location: BannerLocation.topEnd,
+              child: child,
+            )
+          : null,
     );
   }
 }
