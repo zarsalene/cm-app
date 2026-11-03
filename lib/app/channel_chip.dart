@@ -1,18 +1,15 @@
 import 'package:cm_app/app/strings.dart';
 import 'package:cm_app/app/theme.dart';
-import 'package:material_ui/material_ui.dart';
+import 'package:flutter/material.dart';
 
 /// Small `FB` / `WA` label for the customer's channel.
 class ChannelChip extends StatelessWidget {
-  const new(this.platform, {super.key});
+  const ChannelChip(this.platform, {super.key});
 
-  /// `facebook` or `whatsapp`.
   final String platform;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
     final (label, name, background, foreground) = switch (platform) {
       'facebook' => (
         'FB',
@@ -29,8 +26,8 @@ class ChannelChip extends StatelessWidget {
       _ => (
         platform.toUpperCase(),
         platform,
-        scheme.secondaryContainer,
-        scheme.onSecondaryContainer,
+        context.scheme.secondaryContainer,
+        context.scheme.onSecondaryContainer,
       ),
     };
     return Semantics(
@@ -39,7 +36,7 @@ class ChannelChip extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: background,
-          borderRadius: BorderRadius.circular(AppSpacing.xs),
+          borderRadius: BorderRadius.circular(AppRadius.chip / 2),
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(
@@ -48,7 +45,9 @@ class ChannelChip extends StatelessWidget {
           ),
           child: Text(
             label,
-            style: theme.textTheme.labelMedium?.copyWith(color: foreground),
+            style: context.theme.textTheme.labelMedium?.copyWith(
+              color: foreground,
+            ),
           ),
         ),
       ),

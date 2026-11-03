@@ -1,11 +1,11 @@
 import 'package:cm_app/app/credit_line.dart';
 import 'package:cm_app/app/strings.dart';
 import 'package:cm_app/app/theme.dart';
-import 'package:material_ui/material_ui.dart';
+import 'package:flutter/material.dart';
 
 /// Shown while auth is unknown. White: the logos have white backgrounds.
 class SplashPage extends StatefulWidget {
-  const new({super.key});
+  const SplashPage({super.key});
 
   @override
   State<SplashPage> createState() => _SplashPageState();
@@ -17,7 +17,6 @@ class _SplashPageState extends State<SplashPage>
     vsync: this,
     duration: const Duration(milliseconds: 900),
   );
-  // Icon: first 600 ms. Wordmark: last 300 ms.
   late final Animation<double> _scale = Tween<double>(begin: 0.8, end: 1)
       .animate(
         CurvedAnimation(
@@ -25,14 +24,17 @@ class _SplashPageState extends State<SplashPage>
           curve: const Interval(0, 2 / 3, curve: Curves.easeOutBack),
         ),
       );
-  late final _iconFade = CurvedAnimation(
-    parent: _controller,
-    curve: const Interval(0, 2 / 3, curve: Curves.easeOut),
-  );
-  late final _wordmarkFade = CurvedAnimation(
+  late final Animation<double> _wordmarkOpacity = CurvedAnimation(
     parent: _controller,
     curve: const Interval(2 / 3, 1, curve: Curves.easeOut),
   );
+  late final Animation<double> _wordmarkSlide = Tween<double>(begin: 12, end: 0)
+      .animate(
+        CurvedAnimation(
+          parent: _controller,
+          curve: const Interval(2 / 3, 1, curve: Curves.easeOut),
+        ),
+      );
   bool _started = false;
 
   @override
@@ -55,48 +57,96 @@ class _SplashPageState extends State<SplashPage>
 
   @override
   Widget build(BuildContext context) {
-    // Light theme in dark mode too: text must read on the white page.
     return Theme(
-      data: AppTheme.light,
+      data: AppTheme.light(),
       child: Scaffold(
         backgroundColor: Colors.white,
         body: SafeArea(
           child: Column(
             children: [
               Expanded(
-                child: Center(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        FadeTransition(
-                          opacity: _iconFade,
-                          child: ScaleTransition(
-                            scale: _scale,
-                            child: Image.asset(
-                              'assets/logo/icon_1024.png',
-                              width: 160,
-                              semanticLabel: Strings.appName,
+                child: Stack(
+                  children: [
+                    Positioned(
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      child: Container(
+                        height: 200,
+                        decoration: BoxDecoration(
+                          gradient: RadialGradient(
+                            center: Alignment.bottomCenter,
+                            radius: 0.9,
+                            colors: [
+                              AppColors.deepTeal.withValues(alpha: 0.04),
+                              Colors.transparent,
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    Center(
+                      child: SingleChildScrollView(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ScaleTransition(
+                              scale: _scale,
+                              child: Image.asset(
+                                'assets/logo/icon_1024.png',
+                                width: 110,
+                                semanticLabel: Strings.appName,
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.md),
+                            SlideTransition(
+                              position: Tween<Offset>(
+                                begin: const Offset(0, 0.2),
+                                end: Offset.zero,
+                              ).animate(_wordmarkSlide),
+                              child: FadeTransition(
+                                opacity: _wordmarkOpacity,
+                                child: Image.asset(
+                                  'assets/logo/wordmark.png',
+                                  width: 240,
+                                  excludeFromSemantics: true,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (!MediaQuery.disableAnimationsOf(context))
+                      Positioned(
+                        bottom: 130,
+                        left: 0,
+                        right: 0,
+                        child: Center(
+                          child: SizedBox(
+                            width: 200,
+                            height: 3,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(2),
+                              child: LinearProgressIndicator(
+                                minHeight: 3,
+                                backgroundColor: AppColors.deepTeal.withValues(
+                                  alpha: 0.12,
+                                ),
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  AppColors.lightAccent,
+                                ),
+                              ),
                             ),
                           ),
                         ),
-                        const SizedBox(height: AppSpacing.md),
-                        FadeTransition(
-                          opacity: _wordmarkFade,
-                          child: Image.asset(
-                            'assets/logo/wordmark.png',
-                            width: 240,
-                            excludeFromSemantics: true,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                      ),
+                  ],
                 ),
               ),
               const Padding(
                 padding: EdgeInsets.only(bottom: AppSpacing.lg),
-                child: CreditLine(logoHeight: 56),
+                child: CreditLine(logoHeight: 24),
               ),
             ],
           ),

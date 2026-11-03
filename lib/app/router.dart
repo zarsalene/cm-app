@@ -9,9 +9,9 @@ import 'package:cm_app/chat/chat_page.dart';
 import 'package:cm_app/escalations/escalations_cubit.dart';
 import 'package:cm_app/escalations/escalations_page.dart';
 import 'package:cm_app/push/push_service.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:material_ui/material_ui.dart';
 
 /// Tells the router to re-run `redirect` on every [AuthBloc] state change.
 class AuthRefresh extends ChangeNotifier {

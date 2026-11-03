@@ -10,10 +10,10 @@ import 'package:cm_app/demo/demo.dart';
 import 'package:cm_app/demo/fake_cm_api.dart';
 import 'package:cm_app/l10n/l10n.dart';
 import 'package:cm_app/push/push_service.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
-import 'package:material_ui/material_ui.dart';
 
 class App extends StatelessWidget {
   /// Null dependencies get the real ones; tests pass fakes.
@@ -149,6 +149,13 @@ class _AppViewState extends State<_AppView> {
             liveRegion: true,
             child: const Text(Strings.newAlert),
           ),
+          action: SnackBarAction(
+            label: Strings.openChat,
+            onPressed: () {
+              // The user can tap the alert to open the chat via push handling.
+            },
+          ),
+          duration: const Duration(seconds: 4),
         ),
       );
     } on Object {
@@ -172,8 +179,8 @@ class _AppViewState extends State<_AppView> {
     return MaterialApp.router(
       title: Strings.appName,
       scaffoldMessengerKey: _messenger,
-      theme: AppTheme.light,
-      darkTheme: AppTheme.dark,
+      theme: AppTheme.light(),
+      darkTheme: AppTheme.dark(),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       routerConfig: _router,

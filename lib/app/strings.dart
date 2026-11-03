@@ -32,7 +32,29 @@ abstract class Strings {
   static const appName = 'Z-Smart-CM';
   static const developedBy = 'Développé par';
   static const developedByMicrozed = 'Développé par Microzed';
+  static const microzed = 'Microzed';
   static const connectionLost = 'Connexion perdue, nouvelle tentative…';
+  static const openSection = 'Ouvertes';
+  static const closedSection = 'Fermées';
+  static const openAlerts = 'Ouvertes';
+  static const closedAlerts = 'Fermées';
+  static const activate = 'Activer';
+  static const openChat = 'Ouvrir';
+  static const reasonCardLabel = 'Motif';
+  static const expand = 'Développer';
+  static const collapse = 'Réduire';
+  static const scrollToLatest = 'Aller au plus récent';
+  static const today = 'Aujourd’hui';
+  static const yesterday = 'Hier';
+  static const selectableCopy = 'Copier';
+  static const loginTitle = 'Z-Smart-CM';
+  static const loginHintUsername = 'Identifiant';
+  static const loginHintPassword = 'Mot de passe';
+  static const loginButton = 'Se connecter';
+  static const loginLoading = 'Connexion en cours';
+  static const loginError = 'Identifiant ou mot de passe incorrect';
+  static const loginNoConnection = 'Pas de connexion';
+  static const loginOtherError = 'Erreur, réessayez';
 
   /// Error text for a failed call.
   static String errorFor(Object error) => switch (error) {
