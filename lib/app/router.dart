@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cm_app/api/cm_api.dart';
+import 'package:cm_app/app/dashboard_page.dart';
 import 'package:cm_app/app/splash_page.dart';
 import 'package:cm_app/auth/auth_bloc.dart';
 import 'package:cm_app/auth/login_page.dart';
@@ -94,8 +95,9 @@ GoRouter createRouter(
     routes: [
       GoRoute(path: '/splash', builder: (context, state) => const SplashPage()),
       GoRoute(path: '/login', builder: (context, state) => const LoginPage()),
+      GoRoute(path: '/', builder: (context, state) => const DashboardPage()),
       GoRoute(
-        path: '/',
+        path: '/escalations',
         builder: (context, state) => BlocProvider(
           create: (_) {
             final cubit = EscalationsCubit(
@@ -108,26 +110,22 @@ GoRouter createRouter(
           },
           child: const EscalationsPage(),
         ),
-        // Sub-route: `go('/chat/...')` from a push tap keeps the list below,
-        // so back returns to it.
-        routes: [
-          GoRoute(
-            path: 'chat/:platform/:senderId',
-            builder: (context, state) => BlocProvider(
-              create: (_) {
-                final cubit = ChatCubit(
-                  api,
-                  state.pathParameters['senderId']!,
-                  state.pathParameters['platform']!,
-                  onUnauthorized: onUnauthorized,
-                );
-                unawaited(cubit.load());
-                return cubit;
-              },
-              child: const ChatPage(),
-            ),
-          ),
-        ],
+      ),
+      GoRoute(
+        path: '/chat/:platform/:senderId',
+        builder: (context, state) => BlocProvider(
+          create: (_) {
+            final cubit = ChatCubit(
+              api,
+              state.pathParameters['senderId']!,
+              state.pathParameters['platform']!,
+              onUnauthorized: onUnauthorized,
+            );
+            unawaited(cubit.load());
+            return cubit;
+          },
+          child: const ChatPage(),
+        ),
       ),
     ],
   );

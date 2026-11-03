@@ -37,6 +37,41 @@ abstract class AppColors {
   static const Color darkInk = Color(0xFFE7E3D8);
   static const Color lightOnSurfaceVariant = Color(0xFF5F6B66);
   static const Color darkOnSurfaceVariant = Color(0xFFA9B3AE);
+
+  // Premium dashboard colors
+  static const Color lightSurfaceDim = Color(0xFFF5F2EA);
+  static const Color darkSurfaceDim = Color(0xFF111916);
+  static const Color lightCardElevated = Color(0xFFFFFFFF);
+  static const Color darkCardElevated = Color(0xFF1A2522);
+  static const Color lightGlass = Color(0x1AFFFFFF);
+  static const Color darkGlass = Color(0x1A000000);
+  static const Color lightAmberGlow = Color(0x1AD97706);
+  static const Color darkAmberGlow = Color(0x1AF3C06B);
+  static const Color lightTealGlow = Color(0x1A0F766E);
+  static const Color darkTealGlow = Color(0x1A2DB1A5);
+}
+
+abstract class AppShadow {
+  static const card = BoxShadow(
+    color: Color(0x0F000000),
+    blurRadius: 16,
+    offset: Offset(0, 6),
+  );
+  static const elevated = BoxShadow(
+    color: Color(0x14000000),
+    blurRadius: 24,
+    offset: Offset(0, 10),
+  );
+  static const glowTeal = BoxShadow(
+    color: AppColors.lightTealGlow,
+    blurRadius: 20,
+    offset: Offset(0, 0),
+  );
+  static const glowAmber = BoxShadow(
+    color: AppColors.lightAmberGlow,
+    blurRadius: 20,
+    offset: Offset(0, 0),
+  );
 }
 
 abstract class AppSpacing {
@@ -50,7 +85,9 @@ abstract class AppSpacing {
   static const double vertical12 = 12;
   static const double vertical16 = 16;
   static const double vertical24 = 24;
+  static const double xl = 24;
   static const double innerCardPadding = 16;
+  static const double dashboardPadding = 20;
 }
 
 abstract class AppRadius {

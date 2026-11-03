@@ -55,6 +55,23 @@ abstract class Strings {
   static const loginError = 'Identifiant ou mot de passe incorrect';
   static const loginNoConnection = 'Pas de connexion';
   static const loginOtherError = 'Erreur, réessayez';
+  static const forgetPassword = 'Mot de passe oublié ?';
+  static const rememberMe = 'Se souvenir de moi';
+  static const dontHaveAccount = 'Vous n\'avez pas de compte ?';
+  static const createAccount = 'Créer un compte';
+  static const welcomeBack = 'Bon retour,';
+  static const dashboardTitle = 'Tableau de bord';
+  static const openEscalations = 'Ouvertes';
+  static const closedEscalations = 'Fermées';
+  static const avgResponseTime = 'Temps de réponse moyen';
+  static const activeChats = 'Discussions actives';
+  static const newEscalation = 'Nouvelle escalade';
+  static const viewAll = 'Voir tout';
+  static const recentActivity = 'Activité récente';
+  static const noData = 'Aucune donnée';
+  static const profile = 'Profil';
+  static const settings = 'Paramètres';
+  static const help = 'Aide';
 
   /// Error text for a failed call.
   static String errorFor(Object error) => switch (error) {
