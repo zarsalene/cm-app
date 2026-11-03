@@ -27,20 +27,35 @@ class _EscalationsPageState extends State<EscalationsPage>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     unawaited(_cubit.checkNotifications());
+    // The route already loaded the list; polling finds a lost push.
+    final life = WidgetsBinding.instance.lifecycleState;
+    if (life == null || life == AppLifecycleState.resumed) {
+      _cubit.startPolling();
+    }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _cubit.stopPolling();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (_cubit.isClosed) return;
-    // The user may have changed the permission in the settings.
-    if (state == AppLifecycleState.resumed) {
-      unawaited(_cubit.checkNotifications());
+    switch (state) {
+      case AppLifecycleState.resumed:
+        // The user may have changed the permission in the settings.
+        unawaited(_cubit.checkNotifications());
+        unawaited(_cubit.refresh());
+        _cubit.startPolling();
+      case AppLifecycleState.paused ||
+          AppLifecycleState.hidden ||
+          AppLifecycleState.detached:
+        _cubit.stopPolling();
+      case AppLifecycleState.inactive:
+        break; // Brief (dialog, shade): keep polling.
     }
   }
 
@@ -62,6 +77,7 @@ class _EscalationsPageState extends State<EscalationsPage>
         child: Column(
           children: [
             _NotificationsNotice(),
+            _OfflineNotice(),
             Expanded(child: _List()),
           ],
         ),
@@ -129,6 +145,35 @@ class _NotificationsNotice extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Two failed refreshes in a row: the list may be out of date.
+class _OfflineNotice extends StatelessWidget {
+  const new();
+
+  @override
+  Widget build(BuildContext context) {
+    final offline = context.select<EscalationsCubit, bool>(
+      (c) => c.state.offline,
+    );
+    if (!offline) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.xs,
+      ),
+      child: Semantics(
+        liveRegion: true,
+        child: Text(
+          Strings.connectionLost,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.error,
           ),
         ),
       ),

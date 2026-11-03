@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bloc/bloc.dart';
 import 'package:cm_app/api/cm_api.dart';
 import 'package:cm_app/app/strings.dart';
@@ -28,20 +30,70 @@ final class const ChatState({
   List<Object?> get props => [chat, sending, error, draft];
 }
 
+Stream<void> _every10Seconds() =>
+    Stream<void>.periodic(const Duration(seconds: 10));
+
 class ChatCubit extends Cubit<ChatState> {
+  /// [_ticks] makes the polling clock (tests pass their own).
   new(
     this._api,
     this._senderId,
     this._platform, {
     required this._onUnauthorized,
+    this._ticks = _every10Seconds,
   }) : super(const ChatState());
 
   final CmApi _api;
   final String _senderId;
   final String _platform;
   final void Function() _onUnauthorized;
+  final Stream<void> Function() _ticks;
+  StreamSubscription<void>? _poll;
+  bool _refreshing = false;
+
+  /// Bumped by every load, send and give-back: a refresh that started
+  /// before one of them is dropped, so it cannot undo their result.
+  int _seq = 0;
+
+  @override
+  Future<void> close() async {
+    await _poll?.cancel();
+    await super.close();
+  }
+
+  /// Refreshes on every tick until [stopPolling]. Call only while resumed.
+  void startPolling() {
+    if (isClosed) return;
+    _poll ??= _ticks().listen((_) => unawaited(refresh()));
+  }
+
+  void stopPolling() {
+    unawaited(_poll?.cancel());
+    _poll = null;
+  }
+
+  /// Silent load: no error shown, draft and error kept. Skipped while a
+  /// send or give-back runs, or before the first load succeeded.
+  Future<void> refresh() async {
+    if (isClosed || _refreshing || state.sending || state.chat == null) return;
+    _refreshing = true;
+    final seq = _seq;
+    try {
+      final chat = await _api.chat(_senderId, _platform);
+      if (!isClosed && seq == _seq && !state.sending) {
+        emit(state.copyWith(chat: chat, error: state.error));
+      }
+    } on UnauthorizedException {
+      _onUnauthorized();
+    } on Object {
+      // Silent: the next tick tries again.
+    } finally {
+      _refreshing = false;
+    }
+  }
 
   Future<void> load() async {
+    _seq++;
     emit(state.copyWith());
     try {
       final chat = await _api.chat(_senderId, _platform);
@@ -57,6 +109,7 @@ class ChatCubit extends Cubit<ChatState> {
     final chat = state.chat;
     if (state.sending || chat == null || chat.mode == ChatMode.bot) return;
     if (text.trim().isEmpty) return;
+    _seq++;
     emit(state.copyWith(sending: true, draft: text));
     try {
       await _api.reply(_senderId, _platform, text);
@@ -79,6 +132,7 @@ class ChatCubit extends Cubit<ChatState> {
   Future<void> giveBack() async {
     final chat = state.chat;
     if (state.sending || chat == null) return;
+    _seq++;
     emit(state.copyWith(sending: true));
     try {
       await _api.giveBack(_senderId, _platform);

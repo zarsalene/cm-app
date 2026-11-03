@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cm_app/api/cm_api.dart';
 import 'package:cm_app/app/channel_chip.dart';
 import 'package:cm_app/app/strings.dart';
@@ -7,8 +9,48 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// One conversation. Reads [ChatCubit] from the tree.
-class ChatPage extends StatelessWidget {
+class ChatPage extends StatefulWidget {
   const new({super.key});
+
+  @override
+  State<ChatPage> createState() => _ChatPageState();
+}
+
+class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
+  late final ChatCubit _cubit = context.read<ChatCubit>();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    final life = WidgetsBinding.instance.lifecycleState;
+    if (life == null || life == AppLifecycleState.resumed) {
+      _cubit.startPolling();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _cubit.stopPolling();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (_cubit.isClosed) return;
+    switch (state) {
+      case AppLifecycleState.resumed:
+        unawaited(_cubit.refresh());
+        _cubit.startPolling();
+      case AppLifecycleState.paused ||
+          AppLifecycleState.hidden ||
+          AppLifecycleState.detached:
+        _cubit.stopPolling();
+      case AppLifecycleState.inactive:
+        break; // Brief (dialog, shade): keep polling.
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -172,8 +214,17 @@ class _MessageListState extends State<_MessageList> {
   @override
   void didUpdateWidget(_MessageList oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.messages.length != widget.messages.length) _scrollToNewest();
+    // A user reading older messages keeps their place.
+    if (oldWidget.messages.length != widget.messages.length && _atBottom) {
+      _scrollToNewest();
+    }
   }
+
+  // Layout is still the old one here: this is the place before the update.
+  bool get _atBottom =>
+      !_controller.hasClients ||
+      _controller.position.pixels >=
+          _controller.position.maxScrollExtent - kMinInteractiveDimension;
 
   @override
   void dispose() {
