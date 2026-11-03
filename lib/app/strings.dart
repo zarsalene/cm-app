@@ -17,6 +17,7 @@ abstract class Strings {
   static const giveBack = 'Rendre au bot';
   static const giveBackTitle = 'Rendre au bot ?';
   static const giveBackBody = 'Le bot répondra de nouveau à ce client.';
+  static const draftLost = 'Le texte non envoyé sera perdu.';
   static const cancel = 'Annuler';
   static const confirm = 'Confirmer';
   static const customer = 'Client';

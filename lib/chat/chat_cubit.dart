@@ -47,7 +47,8 @@ class ChatCubit extends Cubit<ChatState> {
       final chat = await _api.chat(_senderId, _platform);
       if (!isClosed) emit(state.copyWith(chat: chat));
     } on Object catch (e) {
-      _fail(e);
+      // A failed refresh must not end a send that is still in flight.
+      _fail(e, endsSending: false);
     }
   }
 
@@ -61,11 +62,13 @@ class ChatCubit extends Cubit<ChatState> {
       await _api.reply(_senderId, _platform, text);
       if (isClosed) return;
       final message = ChatMessage(role: 'bot', text: text, at: DateTime.now());
+      // Current chat, not the one before the await: a refresh may have landed.
+      final current = state.chat ?? chat;
       emit(
         state.copyWith(
           sending: false,
           draft: '',
-          chat: _chatWith(chat, messages: [...chat.messages, message]),
+          chat: _chatWith(current, messages: [...current.messages, message]),
         ),
       );
     } on Object catch (e) {
@@ -80,10 +83,11 @@ class ChatCubit extends Cubit<ChatState> {
     try {
       await _api.giveBack(_senderId, _platform);
       if (isClosed) return;
+      final current = state.chat ?? chat;
       emit(
         state.copyWith(
           sending: false,
-          chat: _chatWith(chat, mode: ChatMode.bot),
+          chat: _chatWith(current, mode: ChatMode.bot),
         ),
       );
     } on Object catch (e) {
@@ -91,13 +95,13 @@ class ChatCubit extends Cubit<ChatState> {
     }
   }
 
-  void _fail(Object error) {
+  void _fail(Object error, {bool endsSending = true}) {
     final expired = error is UnauthorizedException;
     if (expired) _onUnauthorized();
     if (isClosed) return;
     emit(
       state.copyWith(
-        sending: false,
+        sending: !(endsSending || expired) && state.sending,
         error: expired ? null : Strings.errorFor(error),
       ),
     );

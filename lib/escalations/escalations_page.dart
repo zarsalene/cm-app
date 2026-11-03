@@ -89,13 +89,22 @@ class _ErrorBanner extends StatelessWidget {
   }
 }
 
-class _Row extends StatelessWidget {
+class _Row extends StatefulWidget {
   const new({required this.item});
 
   final Escalation item;
 
   @override
+  State<_Row> createState() => _RowState();
+}
+
+class _RowState extends State<_Row> {
+  // Blocks a second push from a double tap until the chat page returns.
+  bool _pushing = false;
+
+  @override
   Widget build(BuildContext context) {
+    final item = widget.item;
     final theme = Theme.of(context);
     final isOpen = item.status == 'open';
     final name = Strings.customerLabel(item.customerName, item.senderId);
@@ -170,9 +179,17 @@ class _Row extends StatelessWidget {
   }
 
   Future<void> _open(BuildContext context) async {
+    if (_pushing) return;
+    _pushing = true;
     final cubit = context.read<EscalationsCubit>();
-    final sender = Uri.encodeComponent(item.senderId);
-    await context.push('/chat/${item.platform}/$sender');
+    final sender = Uri.encodeComponent(widget.item.senderId);
+    try {
+      await context.push('/chat/${widget.item.platform}/$sender');
+    } finally {
+      _pushing = false;
+    }
+    // A session expiry disposes the list while the chat is open.
+    if (cubit.isClosed) return;
     // The conversation may have changed (give back, new reply).
     await cubit.load();
   }

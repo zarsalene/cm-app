@@ -63,13 +63,30 @@ class _Loading extends StatelessWidget {
   }
 }
 
-class _Conversation extends StatelessWidget {
+class _Conversation extends StatefulWidget {
   const new({required this.chat});
 
   final Chat chat;
 
   @override
+  State<_Conversation> createState() => _ConversationState();
+}
+
+class _ConversationState extends State<_Conversation> {
+  // Owned here: the give-back dialog needs to know if text is unsent.
+  late final _reply = TextEditingController(
+    text: context.read<ChatCubit>().state.draft,
+  );
+
+  @override
+  void dispose() {
+    _reply.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final chat = widget.chat;
     final theme = Theme.of(context);
     final error = context.select<ChatCubit, String?>((c) => c.state.error);
     return Column(
@@ -118,8 +135,8 @@ class _Conversation extends StatelessWidget {
             ),
           ),
         if (chat.mode == ChatMode.human) ...[
-          const _Composer(),
-          const _GiveBackButton(),
+          _Composer(controller: _reply),
+          _GiveBackButton(reply: _reply),
         ] else
           Padding(
             padding: const EdgeInsets.all(AppSpacing.md),
@@ -259,23 +276,10 @@ class _Bubble extends StatelessWidget {
   }
 }
 
-class _Composer extends StatefulWidget {
-  const new();
+class _Composer extends StatelessWidget {
+  const new({required this.controller});
 
-  @override
-  State<_Composer> createState() => _ComposerState();
-}
-
-class _ComposerState extends State<_Composer> {
-  late final _controller = TextEditingController(
-    text: context.read<ChatCubit>().state.draft,
-  );
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+  final TextEditingController controller;
 
   @override
   Widget build(BuildContext context) {
@@ -284,7 +288,7 @@ class _ComposerState extends State<_Composer> {
       // A send succeeded: the cubit cleared the draft, so clear the field.
       listenWhen: (previous, current) =>
           previous.draft.isNotEmpty && current.draft.isEmpty,
-      listener: (context, _) => _controller.clear(),
+      listener: (context, _) => controller.clear(),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
         child: Row(
@@ -292,7 +296,7 @@ class _ComposerState extends State<_Composer> {
           children: [
             Expanded(
               child: TextField(
-                controller: _controller,
+                controller: controller,
                 readOnly: sending,
                 minLines: 1,
                 maxLines: 3,
@@ -313,7 +317,7 @@ class _ComposerState extends State<_Composer> {
             ),
             const SizedBox(width: AppSpacing.sm),
             ValueListenableBuilder(
-              valueListenable: _controller,
+              valueListenable: controller,
               builder: (context, value, _) => IconButton.filled(
                 tooltip: Strings.send,
                 constraints: const BoxConstraints(
@@ -339,7 +343,9 @@ class _ComposerState extends State<_Composer> {
 }
 
 class _GiveBackButton extends StatelessWidget {
-  const new();
+  const new({required this.reply});
+
+  final TextEditingController reply;
 
   Future<void> _confirm(BuildContext context) async {
     final cubit = context.read<ChatCubit>();
@@ -347,7 +353,11 @@ class _GiveBackButton extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text(Strings.giveBackTitle),
-        content: const Text(Strings.giveBackBody),
+        content: Text(
+          reply.text.trim().isEmpty
+              ? Strings.giveBackBody
+              : '${Strings.giveBackBody} ${Strings.draftLost}',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -360,7 +370,7 @@ class _GiveBackButton extends StatelessWidget {
         ],
       ),
     );
-    if (ok ?? false) await cubit.giveBack();
+    if ((ok ?? false) && !cubit.isClosed) await cubit.giveBack();
   }
 
   @override
