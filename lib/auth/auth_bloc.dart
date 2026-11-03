@@ -1,4 +1,5 @@
 import 'package:bloc/bloc.dart';
+import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:cm_app/api/cm_api.dart';
 import 'package:cm_app/auth/token_store.dart';
 import 'package:cm_app/push/push_service.dart';
@@ -54,10 +55,16 @@ final class const Authenticated(final String username) extends AuthState {
 
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
   new(this._api, this._store, this._push) : super(const AuthUnknown()) {
-    on<AuthStarted>(_onStarted);
-    on<LoginSubmitted>(_onLoginSubmitted);
-    on<LogoutRequested>(_onLogoutRequested);
-    on<SessionExpired>(_onSessionExpired);
+    // One handler, sequential: a logout never interleaves with a login.
+    on<AuthEvent>(
+      (event, emit) => switch (event) {
+        AuthStarted() => _onStarted(event, emit),
+        LoginSubmitted() => _onLoginSubmitted(event, emit),
+        LogoutRequested() => _onLogoutRequested(event, emit),
+        SessionExpired() => _onSessionExpired(event, emit),
+      },
+      transformer: sequential(),
+    );
   }
 
   static const invalidLogin = 'Identifiant ou mot de passe incorrect';
@@ -74,14 +81,15 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     try {
       token = await _store.read();
       username = await _store.readUsername();
-    } on Exception {
+    } on Object {
       // Unreadable secure storage: ask for a new login.
+    } finally {
+      emit(
+        token != null && username != null
+            ? Authenticated(username)
+            : const Unauthenticated(),
+      );
     }
-    emit(
-      token != null && username != null
-          ? Authenticated(username)
-          : const Unauthenticated(),
-    );
   }
 
   Future<void> _onLoginSubmitted(
@@ -115,22 +123,28 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     LogoutRequested event,
     Emitter<AuthState> emit,
   ) async {
-    await _quietly(_api.logout);
-    await _store.delete();
-    await _quietly(_push.unsubscribe);
-    emit(const Unauthenticated());
+    try {
+      await _quietly(_api.logout);
+      await _quietly(_store.delete);
+      await _quietly(_push.unsubscribe);
+    } finally {
+      emit(const Unauthenticated());
+    }
   }
 
   Future<void> _onSessionExpired(
     SessionExpired event,
     Emitter<AuthState> emit,
   ) async {
-    await _store.delete();
-    emit(const Unauthenticated());
+    try {
+      await _quietly(_store.delete);
+    } finally {
+      emit(const Unauthenticated());
+    }
     await _quietly(_push.unsubscribe);
   }
 
-  // Push and server logout are best effort: never block login or logout.
+  // Best effort: a failing call never blocks login or logout.
   static Future<void> _quietly(Future<void> Function() call) async {
     try {
       await call();

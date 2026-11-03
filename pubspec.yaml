@@ -9,6 +9,7 @@ environment:
 
 dependencies:
   bloc: ^9.2.1
+  bloc_concurrency: ^0.3.0
   equatable: ^3.0.0
   firebase_core: ^5.1.0
   firebase_messaging: ^17.0.1
