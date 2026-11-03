@@ -1,0 +1,11 @@
+{
+  "enabledPlugins": {
+    "dart-flutter@dart-flutter": true,
+    "vgv-ai-flutter-plugin@vgv-local": true
+  },
+  "permissions": {
+    "additionalDirectories": [
+      "C:\\Users\\zarsa\\Desktop\\Work\\Facebook_chatbot\\PROJECTS_N8N"
+    ]
+  }
+}
