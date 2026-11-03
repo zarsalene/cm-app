@@ -39,7 +39,8 @@ $js2 = $js2 -replace '<div class="hero-visual">', ('<div class="hero-visual">' +
 }
 
 # Replace the microzed.jpeg relative path in footer with data URI
-$js2 = $js2 -replace 'src="assets/logo/microzed.jpeg"', 'src="' + $microzedLogo + '"'
+$microzedImgTag = 'src="' + $microzedLogo + '"'
+$js2 = $js2 -replace 'src="assets/logo/microzed.jpeg"', $microzedImgTag
 Write-Host "Footer microzed logo replaced"
 
 # Write updated vitrine.js
