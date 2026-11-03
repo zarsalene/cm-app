@@ -7,6 +7,7 @@ import 'package:cm_app/chat/chat_cubit.dart';
 import 'package:cm_app/chat/chat_page.dart';
 import 'package:cm_app/escalations/escalations_cubit.dart';
 import 'package:cm_app/escalations/escalations_page.dart';
+import 'package:cm_app/push/push_service.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
@@ -38,7 +39,12 @@ String? authRedirect(AuthState state, String location) {
   };
 }
 
-GoRouter createRouter(AuthBloc auth, CmApi api, Listenable refresh) {
+GoRouter createRouter(
+  AuthBloc auth,
+  CmApi api,
+  PushService push,
+  Listenable refresh,
+) {
   void onUnauthorized() => auth.add(const SessionExpired());
   return GoRouter(
     initialLocation: '/',
@@ -55,28 +61,36 @@ GoRouter createRouter(AuthBloc auth, CmApi api, Listenable refresh) {
         path: '/',
         builder: (context, state) => BlocProvider(
           create: (_) {
-            final cubit = EscalationsCubit(api, onUnauthorized: onUnauthorized);
+            final cubit = EscalationsCubit(
+              api,
+              onUnauthorized: onUnauthorized,
+              alerts: push.foreground,
+            );
             unawaited(cubit.load());
             return cubit;
           },
           child: const EscalationsPage(),
         ),
-      ),
-      GoRoute(
-        path: '/chat/:platform/:senderId',
-        builder: (context, state) => BlocProvider(
-          create: (_) {
-            final cubit = ChatCubit(
-              api,
-              state.pathParameters['senderId']!,
-              state.pathParameters['platform']!,
-              onUnauthorized: onUnauthorized,
-            );
-            unawaited(cubit.load());
-            return cubit;
-          },
-          child: const ChatPage(),
-        ),
+        // Sub-route: `go('/chat/...')` from a push tap keeps the list below,
+        // so back returns to it.
+        routes: [
+          GoRoute(
+            path: 'chat/:platform/:senderId',
+            builder: (context, state) => BlocProvider(
+              create: (_) {
+                final cubit = ChatCubit(
+                  api,
+                  state.pathParameters['senderId']!,
+                  state.pathParameters['platform']!,
+                  onUnauthorized: onUnauthorized,
+                );
+                unawaited(cubit.load());
+                return cubit;
+              },
+              child: const ChatPage(),
+            ),
+          ),
+        ],
       ),
     ],
   );

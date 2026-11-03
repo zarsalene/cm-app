@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:developer';
 
 import 'package:bloc/bloc.dart';
+import 'package:cm_app/push/push_service.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/widgets.dart';
 
 class AppBlocObserver extends BlocObserver {
@@ -20,14 +22,26 @@ class AppBlocObserver extends BlocObserver {
   }
 }
 
-Future<void> bootstrap(FutureOr<Widget> Function() builder) async {
+Future<void> bootstrap(
+  FutureOr<Widget> Function(PushService push) builder,
+) async {
   FlutterError.onError = (details) {
     log(details.exceptionAsString(), stackTrace: details.stack);
   };
 
   Bloc.observer = const AppBlocObserver();
 
-  // Add cross-flavor configuration here
+  // The only place that picks the push service.
+  PushService push;
+  try {
+    WidgetsFlutterBinding.ensureInitialized();
+    await Firebase.initializeApp();
+    push = FcmPushService();
+  } on Object {
+    // No google-services.json (local build): the app runs without push.
+    log('Firebase init failed: push disabled');
+    push = const NoopPushService();
+  }
 
-  runApp(await builder());
+  runApp(await builder(push));
 }

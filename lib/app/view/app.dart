@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cm_app/api/cm_api.dart';
 import 'package:cm_app/app/router.dart';
 import 'package:cm_app/app/theme.dart';
@@ -31,7 +33,7 @@ class App extends StatelessWidget {
               CmApi(http.Client(), token: context.read<TokenStore>().read),
         ),
         RepositoryProvider<PushService>(
-          // shortcut: no-op until Task 9 adds the real push service.
+          // bootstrap passes the real service; null (tests) means no push.
           create: (_) => push ?? const NoopPushService(),
         ),
       ],
@@ -57,17 +59,49 @@ class _AppView extends StatefulWidget {
 class _AppViewState extends State<_AppView> {
   late final AuthRefresh _refresh;
   late final GoRouter _router;
+  late final StreamSubscription<PushTarget> _opened;
+  late final StreamSubscription<AuthState> _auth;
+
+  /// A tapped alert that arrived before login; opened right after it.
+  PushTarget? _pending;
 
   @override
   void initState() {
     super.initState();
     final auth = context.read<AuthBloc>();
+    final push = context.read<PushService>();
     _refresh = AuthRefresh(auth);
-    _router = createRouter(auth, context.read<CmApi>(), _refresh);
+    _router = createRouter(auth, context.read<CmApi>(), push, _refresh);
+    _opened = push.opened.listen((target) {
+      if (auth.state is Authenticated) {
+        _openChat(target);
+      } else {
+        _pending = target;
+      }
+    });
+    var wasAuthenticated = auth.state is Authenticated;
+    _auth = auth.stream.listen((state) {
+      final isAuthenticated = state is Authenticated;
+      if (isAuthenticated) {
+        final target = _pending;
+        _pending = null;
+        if (target != null) _openChat(target);
+      } else if (wasAuthenticated) {
+        _pending = null; // Logout: never open a chat for the next login.
+      }
+      wasAuthenticated = isAuthenticated;
+    });
+  }
+
+  void _openChat(PushTarget target) {
+    // parsePushTarget allows only digits and known platforms: path is safe.
+    _router.go('/chat/${target.platform}/${target.senderId}');
   }
 
   @override
   void dispose() {
+    unawaited(_opened.cancel());
+    unawaited(_auth.cancel());
     _router.dispose();
     _refresh.dispose();
     super.dispose();

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bloc/bloc.dart';
 import 'package:cm_app/api/cm_api.dart';
 import 'package:cm_app/app/strings.dart';
@@ -13,11 +15,25 @@ final class const EscalationsState({
 }
 
 class EscalationsCubit extends Cubit<EscalationsState> {
-  new(this._api, {required this._onUnauthorized})
-    : super(const EscalationsState(loading: true));
+  /// Each [alerts] event (a push received in the foreground) reloads the list.
+  new(
+    this._api, {
+    required this._onUnauthorized,
+    Stream<void> alerts = const Stream.empty(),
+  }) : super(const EscalationsState(loading: true)) {
+    _alerts = alerts.listen((_) => unawaited(load()));
+  }
 
   final CmApi _api;
   final void Function() _onUnauthorized;
+  late final StreamSubscription<void> _alerts;
+
+  @override
+  Future<void> close() async {
+    // Cancel first: no load() may run on a closed cubit.
+    await _alerts.cancel();
+    await super.close();
+  }
 
   /// Loads the list. The server already sorts it: open first, newest first.
   Future<void> load() async {
