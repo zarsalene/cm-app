@@ -3,7 +3,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Telechargement APK Z-Smart-CM\n\nCe workflow redirige vers la release GitHub v3.1.1.\n\nURL publique : `https://n8ntest.microzed.tn/webhook/z-smart-cm-download`\nCible : https://github.com/zarsalene/cm-app/releases/download/v3.1.1/Z-Smart-CM.apk\n\nAucun fichier a copier sur le serveur n8n.\n\n**3. Activer** ce workflow.\n",
+        "content": "## Telechargement APK Z-Smart-CM\n\nCe workflow redirige vers la release GitHub v3.1.2.\n\nURL publique : `https://n8ntest.microzed.tn/webhook/z-smart-cm-download`\nCible : https://github.com/zarsalene/cm-app/releases/download/v3.1.2/Z-Smart-CM.apk\n\nAucun fichier a copier sur le serveur n8n.\n\n**3. Activer** ce workflow.\n",
         "height": 240,
         "width": 400
       },
@@ -43,7 +43,7 @@
             "entries": [
               {
                 "name": "Location",
-                "value": "https://github.com/zarsalene/cm-app/releases/download/v3.1.1/Z-Smart-CM.apk"
+                "value": "https://github.com/zarsalene/cm-app/releases/download/v3.1.2/Z-Smart-CM.apk"
               },
               {
                 "name": "Cache-Control",
