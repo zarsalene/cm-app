@@ -10,7 +10,7 @@ const html = `<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Z-Smart-CM — Vendez en bot, dépannez en humain</title>
 <meta name="description" content="Z-Smart-CM : l'application CM de Microzed. Quand votre bot Messenger ou WhatsApp bloque, votre agent reprend la main en une notification — puis rend la conversation au bot.">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%230F766E'/><text x='16' y='22' font-size='18' font-weight='bold' fill='white' text-anchor='middle' font-family='Arial'>Z</text></svg>">
+<link rel="icon" href="__APP_ICON__">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{--teal:#0F766E;--deep:#134e4a;--orange:#D97706;--ink:#e7edf7;--muted:#9aa7bd;--card:#101a2d;--line:#1f2b45;--fb:#1877F2;--wa:#25D366}
@@ -20,7 +20,7 @@ body{font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;back
 .nav{position:sticky;top:0;z-index:10;background:rgba(11,18,32,.85);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
 .nav-inner{display:flex;align-items:center;justify-content:space-between;height:64px;gap:16px}
 .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:16px;color:var(--ink);text-decoration:none}
-.logo{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--teal),var(--deep));color:#fff;font-weight:900;display:flex;align-items:center;justify-content:center;font-size:17px}
+.logo-img{width:34px;height:34px;border-radius:10px;display:block}
 .nav-links{display:flex;align-items:center;gap:22px}
 .nav-links a{color:var(--muted);text-decoration:none;font-size:14px}
 .nav-links a:hover{color:var(--ink)}
@@ -30,7 +30,7 @@ body{font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;back
 .btn-ghost{border:1px solid var(--line);color:var(--ink)}
 .btn-ghost:hover{border-color:var(--muted)}
 .btn-sm{padding:9px 16px;font-size:13px;border-radius:10px}
-.hero{padding:72px 0 56px;display:grid;grid-template-columns:1.15fr .85fr;gap:48px;align-items:center}
+.hero-logo{width:84px;height:84px;border-radius:20px;margin-bottom:20px;box-shadow:0 12px 30px rgba(15,118,110,.35)}
 .eyebrow{color:var(--orange);font-weight:800;text-transform:uppercase;letter-spacing:.1em;font-size:12px}
 h1{font-size:44px;line-height:1.12;letter-spacing:-.5px;margin:12px 0 18px}
 .lead{color:var(--muted);font-size:18px;margin-bottom:28px;max-width:520px}
@@ -96,7 +96,7 @@ footer a{color:var(--muted)}
       <a href="#features">Fonctionnalités</a>
       <a href="#how">Fonctionnement</a>
       <a href="#screens">Les écrans</a>
-      <a class="btn btn-primary btn-sm" href="https://microzed.tn" target="_blank" rel="noopener">Demander une démo</a>
+      <a class="btn btn-primary btn-sm" href="https://n8ntest.microzed.tn/webhook/z-smart-cm-download" rel="noopener">Télécharger l'APK</a>
     </div>
   </div>
 </nav>
@@ -108,7 +108,7 @@ footer a{color:var(--muted)}
       <h1>Vendez en bot.<br>Dépannez en humain.</h1>
       <p class="lead">Z-Smart-CM alerte votre Community Manager dès qu'une conversation Messenger ou WhatsApp lui échappe. Il prend la main, répond, et rend la conversation au bot en un clic.</p>
       <div class="hero-cta">
-        <a class="btn btn-primary" href="https://microzed.tn" target="_blank" rel="noopener">Demander une démo</a>
+        <a class="btn btn-primary" href="https://n8ntest.microzed.tn/webhook/z-smart-cm-download" rel="noopener">Télécharger l'APK</a>
         <a class="btn btn-ghost" href="#how">Voir le fonctionnement</a>
       </div>
       <div class="chips">
@@ -218,7 +218,7 @@ footer a{color:var(--muted)}
       <h3>Prêt à ne plus perdre un client en route ?</h3>
       <p>Démonstration gratuite avec vos propres conversations Messenger &amp; WhatsApp.</p>
     </div>
-    <a class="btn btn-primary" href="https://microzed.tn" target="_blank" rel="noopener">Demander une démo →</a>
+    <a class="btn btn-primary" href="https://n8ntest.microzed.tn/webhook/z-smart-cm-download" rel="noopener">Télécharger l'APK →</a>
   </div>
 </div>
 
