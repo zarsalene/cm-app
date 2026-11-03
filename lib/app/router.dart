@@ -95,7 +95,21 @@ GoRouter createRouter(
     routes: [
       GoRoute(path: '/splash', builder: (context, state) => const SplashPage()),
       GoRoute(path: '/login', builder: (context, state) => const LoginPage()),
-      GoRoute(path: '/', builder: (context, state) => const DashboardPage()),
+      GoRoute(
+        path: '/',
+        builder: (context, state) => BlocProvider(
+          create: (_) {
+            final cubit = EscalationsCubit(
+              api,
+              onUnauthorized: onUnauthorized,
+              push: push,
+            );
+            unawaited(cubit.load());
+            return cubit;
+          },
+          child: const DashboardPage(),
+        ),
+      ),
       GoRoute(
         path: '/escalations',
         builder: (context, state) => BlocProvider(

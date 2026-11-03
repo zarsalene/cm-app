@@ -2,12 +2,14 @@ import 'package:cm_app/app/app_drawer.dart';
 import 'package:cm_app/app/channel_chip.dart';
 import 'package:cm_app/app/strings.dart';
 import 'package:cm_app/app/theme.dart';
+import 'package:cm_app/escalations/escalations_cubit.dart';
 import 'package:cm_app/escalations/escalations_page.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
-/// Premium dashboard: welcome header, stat cards, quick actions,
-/// recent activity and a navigation drawer.
+/// Premium dashboard with real data from the escalations cubit.
+/// Every button navigates to a real screen; nothing is a stub.
 class DashboardPage extends StatelessWidget {
   const DashboardPage({super.key});
 
@@ -17,310 +19,339 @@ class DashboardPage extends StatelessWidget {
     final scheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
 
-    return Scaffold(
-      drawer: const AppDrawer(),
-      appBar: AppBar(
-        title: Text(
-          Strings.dashboardTitle,
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        centerTitle: false,
-        elevation: 0,
-        backgroundColor: Colors.transparent,
-        foregroundColor: scheme.onSurface,
-        actions: [
-          _AppBarAction(
-            icon: Icons.notifications_none,
-            activeIcon: Icons.notifications,
-            label: 'Alertes',
-            onTap: () {},
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          _ProfileAvatar(),
-        ],
-      ),
-      body: Container(
-        color: isDark ? AppColors.darkSurface : AppColors.lightSurfaceDim,
-        child: SafeArea(
-          child: CustomScrollView(
-            physics: const BouncingScrollPhysics(),
-            slivers: [
-              // Welcome
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.pageGutter,
-                    AppSpacing.vertical12,
-                    AppSpacing.pageGutter,
-                    AppSpacing.vertical16,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '${Strings.welcomeBack} l\'équipe CM.',
-                        style: theme.textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: scheme.onSurface,
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.xs),
-                      Text(
-                        'Voici l\'état de vos escalades et conversations.',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+    return BlocBuilder<EscalationsCubit, EscalationsState>(
+      builder: (context, state) {
+        final openCount = state.items.where((i) => i.status == 'open').length;
+        final closedCount = state.items
+            .where((i) => i.status == 'closed')
+            .length;
+        final under15 = state.items.where((i) {
+          if (i.status != 'open') return false;
+          return DateTime.now().difference(i.escalatedAt).inMinutes < 15;
+        }).length;
+
+        return Scaffold(
+          drawer: const AppDrawer(),
+          appBar: AppBar(
+            title: Text(
+              Strings.dashboardTitle,
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w700,
               ),
-              // Stat cards
-              SliverPadding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.pageGutter,
-                ),
-                sliver: SliverToBoxAdapter(
-                  child: _StatRow(scheme: scheme, theme: theme),
-                ),
+            ),
+            centerTitle: false,
+            elevation: 0,
+            backgroundColor: Colors.transparent,
+            foregroundColor: scheme.onSurface,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                onPressed: () => context.read<EscalationsCubit>().load(),
+                tooltip: 'Actualiser',
               ),
-              const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xl)),
-              // Quick actions
-              SliverPadding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.pageGutter,
-                ),
-                sliver: SliverToBoxAdapter(
-                  child: _SectionHeader(
-                    theme: theme,
-                    title: 'Actions rapides',
-                    subtitle: 'Accédez aux fonctions principales',
-                  ),
-                ),
-              ),
-              const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),
-              SliverPadding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.pageGutter,
-                ),
-                sliver: SliverToBoxAdapter(
-                  child: _QuickActions(
-                    onNewEscalation: () {
-                      context.go('/escalations');
-                    },
-                    onViewEscalations: () {
-                      context.go('/escalations');
-                    },
-                  ),
-                ),
-              ),
-              const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xl)),
-              // Recent activity
-              SliverPadding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.pageGutter,
-                ),
-                sliver: SliverToBoxAdapter(
-                  child: _SectionHeader(
-                    theme: theme,
-                    title: Strings.recentActivity,
-                    subtitle: Strings.viewAll,
-                    onViewAll: () {
-                      context.go('/escalations');
-                    },
-                  ),
-                ),
-              ),
-              const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),
-              SliverPadding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.pageGutter,
-                ),
-                sliver: SliverToBoxAdapter(
-                  child: _RecentList(scheme: scheme, theme: theme),
-                ),
-              ),
-              const SliverToBoxAdapter(
-                child: SizedBox(
-                  height: AppSpacing.vertical24 + AppSpacing.pageGutter,
-                ),
-              ),
+              const SizedBox(width: AppSpacing.sm),
+              _ProfileAvatar(),
             ],
           ),
-        ),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          context.go('/escalations');
-        },
-        icon: const Icon(Icons.add),
-        label: Text(Strings.newEscalation),
-        backgroundColor: scheme.primary,
-        foregroundColor: Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(AppRadius.button)),
-        ),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+          body: Container(
+            color: isDark ? AppColors.darkSurface : AppColors.lightSurfaceDim,
+            child: SafeArea(
+              child: _DashboardBody(
+                state: state,
+                openCount: openCount,
+                closedCount: closedCount,
+                under15: under15,
+                theme: theme,
+                scheme: scheme,
+              ),
+            ),
+          ),
+          floatingActionButton: openCount > 0
+              ? FloatingActionButton.extended(
+                  onPressed: () => context.go('/escalations'),
+                  icon: const Icon(Icons.list),
+                  label: Text(
+                    'Voir les ${openCount} ouverte${openCount > 1 ? 's' : ''}',
+                  ),
+                  backgroundColor: scheme.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.all(
+                      Radius.circular(AppRadius.button),
+                    ),
+                  ),
+                )
+              : null,
+        );
+      },
     );
   }
 }
 
-class _AppBarAction extends StatelessWidget {
-  const _AppBarAction({
-    required this.icon,
-    required this.activeIcon,
-    required this.label,
-    required this.onTap,
+class _DashboardBody extends StatelessWidget {
+  const _DashboardBody({
+    required this.state,
+    required this.openCount,
+    required this.closedCount,
+    required this.under15,
+    required this.theme,
+    required this.scheme,
   });
 
-  final IconData icon;
-  final IconData activeIcon;
-  final String label;
-  final VoidCallback onTap;
+  final EscalationsState state;
+  final int openCount;
+  final int closedCount;
+  final int under15;
+  final ThemeData theme;
+  final ColorScheme scheme;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    return IconButton(
-      icon: Icon(icon, color: scheme.onSurface),
-      onPressed: onTap,
-      tooltip: label,
-    );
-  }
-}
+    if (state.loading && state.items.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
-class _ProfileAvatar extends StatelessWidget {
-  const _ProfileAvatar();
+    if (state.error != null && state.items.isEmpty) {
+      return _ErrorState(
+        theme: theme,
+        scheme: scheme,
+        message: state.error!,
+        onRetry: () => context.read<EscalationsCubit>().load(),
+      );
+    }
 
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return GestureDetector(
-      onTap: () => Scaffold.of(context).openDrawer(),
-      child: Container(
-        margin: const EdgeInsets.only(right: AppSpacing.sm),
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-          color: scheme.primaryContainer,
-          shape: BoxShape.circle,
-          boxShadow: [AppShadow.card],
-        ),
-        child: Center(
-          child: Text(
-            'U',
-            style: TextStyle(
-              color: scheme.onPrimaryContainer,
-              fontWeight: FontWeight.w700,
-              fontSize: 14,
+    return CustomScrollView(
+      physics: const BouncingScrollPhysics(),
+      slivers: [
+        // Welcome
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.pageGutter,
+              AppSpacing.vertical12,
+              AppSpacing.pageGutter,
+              AppSpacing.vertical16,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Tableau de bord',
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: scheme.onSurface,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  '${state.items.length} escalade${state.items.length > 1 ? 's' : ''} '
+                  'au total.',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
+        // Stat cards
+        SliverPadding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.pageGutter,
+          ),
+          sliver: SliverToBoxAdapter(
+            child: _StatRow(
+              openCount: openCount,
+              closedCount: closedCount,
+              under15: under15,
+              total: state.items.length,
+              theme: theme,
+              scheme: scheme,
+            ),
+          ),
+        ),
+        const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xl)),
+        // Quick actions (only real destinations)
+        SliverPadding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.pageGutter,
+          ),
+          sliver: SliverToBoxAdapter(
+            child: _SectionHeader(
+              theme: theme,
+              title: 'Actions',
+              subtitle: 'Gérer les escalades',
+            ),
+          ),
+        ),
+        const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),
+        SliverPadding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.pageGutter,
+          ),
+          sliver: SliverToBoxAdapter(
+            child: _QuickActions(
+              onViewEscalations: () => context.go('/escalations'),
+            ),
+          ),
+        ),
+        const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xl)),
+        // Recent activity (real items only)
+        if (state.items.isNotEmpty) ...[
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.pageGutter,
+            ),
+            sliver: SliverToBoxAdapter(
+              child: _SectionHeader(
+                theme: theme,
+                title: Strings.recentActivity,
+                subtitle: Strings.viewAll,
+                onViewAll: () => context.go('/escalations'),
+              ),
+            ),
+          ),
+          const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.pageGutter,
+            ),
+            sliver: SliverToBoxAdapter(
+              child: _RecentList(
+                items: state.items,
+                theme: theme,
+                scheme: scheme,
+              ),
+            ),
+          ),
+          const SliverToBoxAdapter(
+            child: SizedBox(
+              height: AppSpacing.vertical24 + AppSpacing.pageGutter,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ErrorState extends StatelessWidget {
+  const _ErrorState({
+    required this.theme,
+    required this.scheme,
+    required this.message,
+    required this.onRetry,
+  });
+
+  final ThemeData theme;
+  final ColorScheme scheme;
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.error_outline, color: scheme.error, size: 64),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            'Erreur',
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: scheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          FilledButton(onPressed: onRetry, child: const Text('Réessayer')),
+        ],
       ),
     );
   }
 }
 
 class _StatRow extends StatelessWidget {
-  const _StatRow({required this.scheme, required this.theme});
+  const _StatRow({
+    required this.openCount,
+    required this.closedCount,
+    required this.under15,
+    required this.total,
+    required this.theme,
+    required this.scheme,
+  });
 
-  final ColorScheme scheme;
+  final int openCount;
+  final int closedCount;
+  final int under15;
+  final int total;
   final ThemeData theme;
+  final ColorScheme scheme;
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isWide = constraints.maxWidth > 600;
-        return Column(
+    return Column(
+      children: [
+        Row(
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: _StatCard(
-                    title: Strings.openEscalations,
-                    value: '12',
-                    delta: '+3 aujourd\'hui',
-                    color: AppColors.alertAmber,
-                    glow: AppColors.lightAmberGlow,
-                    icon: Icons.error_outline,
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: _StatCard(
-                    title: Strings.closedEscalations,
-                    value: '84',
-                    delta: '+12 cette semaine',
-                    color: AppColors.lightPrimary,
-                    glow: AppColors.lightTealGlow,
-                    icon: Icons.check_circle_outline,
-                  ),
-                ),
-              ],
+            Expanded(
+              child: _StatCard(
+                title: Strings.openEscalations,
+                value: openCount.toString(),
+                delta: under15 > 0
+                    ? '$under15 urgente${under15 > 1 ? 's' : ''}'
+                    : 'Aucune urgente',
+                color: AppColors.alertAmber,
+                icon: Icons.error_outline,
+              ),
             ),
-            if (!isWide) ...[
-              const SizedBox(height: AppSpacing.md),
-              Row(
-                children: [
-                  Expanded(
-                    child: _StatCard(
-                      title: Strings.avgResponseTime,
-                      value: '2 min 4 s',
-                      delta: '-15 % vs semaine',
-                      color: AppColors.whatsapp,
-                      glow: AppColors.lightAmberGlow,
-                      icon: Icons.access_time,
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: _StatCard(
-                      title: Strings.activeChats,
-                      value: '6',
-                      delta: 'en cours',
-                      color: AppColors.facebook,
-                      glow: AppColors.lightTealGlow,
-                      icon: Icons.chat,
-                    ),
-                  ),
-                ],
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: _StatCard(
+                title: Strings.closedEscalations,
+                value: closedCount.toString(),
+                delta: 'résolues',
+                color: scheme.primary,
+                icon: Icons.check_circle_outline,
               ),
-            ] else ...[
-              const SizedBox(height: AppSpacing.md),
-              Row(
-                children: [
-                  Expanded(
-                    child: _StatCard(
-                      title: Strings.avgResponseTime,
-                      value: '2 min 4 s',
-                      delta: '-15 % vs semaine',
-                      color: AppColors.whatsapp,
-                      glow: AppColors.lightAmberGlow,
-                      icon: Icons.access_time,
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: _StatCard(
-                      title: Strings.activeChats,
-                      value: '6',
-                      delta: 'en cours',
-                      color: AppColors.facebook,
-                      glow: AppColors.lightTealGlow,
-                      icon: Icons.chat,
-                    ),
-                  ),
-                ],
-              ),
-            ],
+            ),
           ],
-        );
-      },
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Row(
+          children: [
+            Expanded(
+              child: _StatCard(
+                title: 'Total',
+                value: total.toString(),
+                delta: 'escalades',
+                color: scheme.primary,
+                icon: Icons.list_alt,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: _StatCard(
+                title: 'Taux de clôture',
+                value: total > 0
+                    ? '${(closedCount / total * 100).round()}%'
+                    : '0%',
+                delta: 'des escalades',
+                color: scheme.primary,
+                icon: Icons.timeline,
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -331,7 +362,6 @@ class _StatCard extends StatelessWidget {
     required this.value,
     required this.delta,
     required this.color,
-    required this.glow,
     required this.icon,
   });
 
@@ -339,7 +369,6 @@ class _StatCard extends StatelessWidget {
   final String value;
   final String delta;
   final Color color;
-  final Color glow;
   final IconData icon;
 
   @override
@@ -360,21 +389,14 @@ class _StatCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(color: glow, blurRadius: 12, offset: Offset.zero),
-                  ],
-                ),
-                child: Center(child: Icon(icon, color: color, size: 18)),
-              ),
-            ],
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Center(child: Icon(icon, color: color, size: 18)),
           ),
           const SizedBox(height: AppSpacing.md),
           Text(
@@ -462,12 +484,8 @@ class _SectionHeader extends StatelessWidget {
 }
 
 class _QuickActions extends StatelessWidget {
-  const _QuickActions({
-    required this.onNewEscalation,
-    required this.onViewEscalations,
-  });
+  const _QuickActions({required this.onViewEscalations});
 
-  final VoidCallback onNewEscalation;
   final VoidCallback onViewEscalations;
 
   @override
@@ -480,35 +498,21 @@ class _QuickActions extends StatelessWidget {
       crossAxisCount: 2,
       mainAxisSpacing: AppSpacing.md,
       crossAxisSpacing: AppSpacing.md,
-      childAspectRatio: 1.55,
+      childAspectRatio: 1.6,
       children: [
         _ActionTile(
-          icon: Icons.add_circle_outline,
-          label: 'Nouvelle escalade',
-          color: AppColors.alertAmber,
-          glow: AppColors.lightAmberGlow,
-          onTap: onNewEscalation,
-        ),
-        _ActionTile(
           icon: Icons.list_alt,
-          label: 'Toutes les escalades',
-          color: AppColors.lightPrimary,
+          label: 'Voir les escalades',
+          color: scheme.primary,
           glow: AppColors.lightTealGlow,
           onTap: onViewEscalations,
         ),
         _ActionTile(
-          icon: Icons.chat_bubble_outline,
-          label: 'Conversations',
-          color: AppColors.facebook,
-          glow: AppColors.lightTealGlow,
-          onTap: () {},
-        ),
-        _ActionTile(
-          icon: Icons.notifications,
-          label: 'Alertes actives',
-          color: AppColors.whatsapp,
+          icon: Icons.refresh,
+          label: 'Actualiser',
+          color: AppColors.alertAmber,
           glow: AppColors.lightAmberGlow,
-          onTap: () {},
+          onTap: () => context.read<EscalationsCubit>().load(),
         ),
       ],
     );
@@ -559,9 +563,6 @@ class _ActionTile extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: color.withValues(alpha: 0.12),
                   shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(color: glow, blurRadius: 12, offset: Offset.zero),
-                  ],
                 ),
                 child: Center(child: Icon(icon, color: color, size: 22)),
               ),
@@ -585,45 +586,29 @@ class _ActionTile extends StatelessWidget {
 }
 
 class _RecentList extends StatelessWidget {
-  const _RecentList({required this.scheme, required this.theme});
+  const _RecentList({
+    required this.items,
+    required this.theme,
+    required this.scheme,
+  });
 
-  final ColorScheme scheme;
+  final List<Escalation> items;
   final ThemeData theme;
+  final ColorScheme scheme;
 
   @override
   Widget build(BuildContext context) {
-    final items = [
-      _RecentItem(
-        name: 'Sarah Ben Ali',
-        platform: 'whatsapp',
-        time: 'il y a 5 min',
-        status: 'open',
-      ),
-      _RecentItem(
-        name: 'Karim Ghozzi',
-        platform: 'facebook',
-        time: 'il y a 1 h',
-        status: 'open',
-      ),
-      _RecentItem(
-        name: 'Fatma Trabelsi',
-        platform: 'whatsapp',
-        time: 'il y a 3 h',
-        status: 'closed',
-      ),
-      _RecentItem(
-        name: 'Omar Jaziri',
-        platform: 'facebook',
-        time: 'Hier',
-        status: 'closed',
-      ),
-    ];
+    // Show most recent 5 only, newest first
+    final sorted = List<Escalation>.from(items)
+      ..sort((a, b) => b.escalatedAt.compareTo(a.escalatedAt));
+    final recent = sorted.take(5).toList();
+
     return Column(
-      children: items
+      children: recent
           .map(
             (item) => Padding(
               padding: const EdgeInsets.only(bottom: AppSpacing.md),
-              child: _RecentRow(item: item),
+              child: _RecentRow(item: item, theme: theme, scheme: scheme),
             ),
           )
           .toList(),
@@ -631,29 +616,30 @@ class _RecentList extends StatelessWidget {
   }
 }
 
-class _RecentItem {
-  const _RecentItem({
-    required this.name,
-    required this.platform,
-    required this.time,
-    required this.status,
-  });
-  final String name;
-  final String platform;
-  final String time;
-  final String status; // 'open' | 'closed'
-}
-
 class _RecentRow extends StatelessWidget {
-  const _RecentRow({required this.item});
+  const _RecentRow({
+    required this.item,
+    required this.theme,
+    required this.scheme,
+  });
 
-  final _RecentItem item;
+  final Escalation item;
+  final ThemeData theme;
+  final ColorScheme scheme;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
     final isOpen = item.status == 'open';
+    final name = item.customerName?.isNotEmpty == true
+        ? item.customerName!
+        : 'Client …${item.senderId.length > 4 ? item.senderId.substring(item.senderId.length - 4) : item.senderId}';
+    final minutes = DateTime.now().difference(item.escalatedAt).inMinutes;
+    final time = minutes < 60
+        ? 'il y a $minutes min'
+        : (minutes ~/ 60 < 24
+              ? 'il y a ${minutes ~/ 60} h'
+              : 'il y a ${minutes ~/ 60 ~/ 24} j');
+
     return Container(
       decoration: BoxDecoration(
         color: scheme.surfaceContainer,
@@ -671,7 +657,7 @@ class _RecentRow extends StatelessWidget {
               radius: 22,
               backgroundColor: scheme.primaryContainer,
               child: Text(
-                item.name.isNotEmpty ? item.name[0].toUpperCase() : '?',
+                name.isNotEmpty ? name[0].toUpperCase() : '?',
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: scheme.onPrimaryContainer,
                   fontWeight: FontWeight.w700,
@@ -699,18 +685,19 @@ class _RecentRow extends StatelessWidget {
           ],
         ),
         title: Text(
-          item.name,
+          name,
           style: theme.textTheme.bodyLarge?.copyWith(
             fontWeight: FontWeight.w600,
             color: scheme.onSurface,
           ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
         subtitle: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            ChannelChip(item.platform),
-            const SizedBox(width: AppSpacing.sm),
             Text(
-              item.time,
+              time,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: scheme.onSurfaceVariant,
               ),
@@ -737,6 +724,38 @@ class _RecentRow extends StatelessWidget {
               color: isOpen ? AppColors.alertAmber : scheme.onSurfaceVariant,
               fontWeight: FontWeight.w600,
               fontSize: 10,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileAvatar extends StatelessWidget {
+  const _ProfileAvatar();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return GestureDetector(
+      onTap: () => Scaffold.of(context).openDrawer(),
+      child: Container(
+        margin: const EdgeInsets.only(right: AppSpacing.sm),
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: scheme.primaryContainer,
+          shape: BoxShape.circle,
+          boxShadow: [AppShadow.card],
+        ),
+        child: Center(
+          child: Text(
+            'U',
+            style: TextStyle(
+              color: scheme.onPrimaryContainer,
+              fontWeight: FontWeight.w700,
+              fontSize: 14,
             ),
           ),
         ),
