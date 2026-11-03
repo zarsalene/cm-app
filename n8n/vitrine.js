@@ -503,6 +503,10 @@ const html = `<!doctype html>
         <span class="chip">💬 Messenger + WhatsApp</span>
         <span class="chip">🔁 Rendre au bot</span>
         <span class="chip">🔐 Session sécurisée</span>
+        <span class="chip">⚡ Mise à jour en direct</span>
+        <span class="chip">🔎 Recherche &amp; filtres</span>
+        <span class="chip">✨ Réponses rapides</span>
+        <span class="chip">Version 3.1.0</span>
       </div>
     </div>
   </div>

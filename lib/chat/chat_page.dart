@@ -520,7 +520,7 @@ class _Bubble extends StatelessWidget {
       foreground = scheme.onSurfaceVariant;
     } else {
       background = scheme.primary;
-      foreground = Colors.white;
+      foreground = scheme.onPrimary;
     }
 
     final alignment = isCustomer ? Alignment.centerLeft : Alignment.centerRight;
@@ -627,6 +627,16 @@ class _ComposerState extends State<_Composer> {
 
   @override
   Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _QuickReplies(controller: widget.controller),
+        _buildBar(context),
+      ],
+    );
+  }
+
+  Widget _buildBar(BuildContext context) {
     final scheme = context.scheme;
     final sending = context.select<ChatCubit, bool>((c) => c.state.sending);
     return Container(
@@ -713,14 +723,14 @@ class _ComposerState extends State<_Composer> {
                           HapticFeedback.lightImpact();
                         },
                   icon: sending
-                      ? const SizedBox.square(
+                      ? SizedBox.square(
                           dimension: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white,
+                            color: scheme.onPrimary,
                           ),
                         )
-                      : const Icon(Icons.send, color: Colors.white, size: 20),
+                      : Icon(Icons.send, color: scheme.onPrimary, size: 20),
                 ),
               ),
             ),
@@ -849,6 +859,55 @@ class _BotActiveCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Canned replies: a tap fills the composer. Shown while it is empty.
+class _QuickReplies extends StatelessWidget {
+  const _QuickReplies({required this.controller});
+
+  final TextEditingController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<TextEditingValue>(
+      valueListenable: controller,
+      builder: (context, value, _) => AnimatedSize(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOutCubic,
+        alignment: Alignment.bottomCenter,
+        child: value.text.isNotEmpty
+            ? const SizedBox(width: double.infinity)
+            : Semantics(
+                label: Strings.quickRepliesLabel,
+                container: true,
+                child: SizedBox(
+                  height: 44,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.pageGutter,
+                    ),
+                    itemCount: Strings.quickReplies.length,
+                    separatorBuilder: (_, _) =>
+                        const SizedBox(width: AppSpacing.sm),
+                    itemBuilder: (context, i) => ActionChip(
+                      label: Text(Strings.quickReplies[i]),
+                      onPressed: () {
+                        controller.value = TextEditingValue(
+                          text: Strings.quickReplies[i],
+                          selection: TextSelection.collapsed(
+                            offset: Strings.quickReplies[i].length,
+                          ),
+                        );
+                        HapticFeedback.selectionClick();
+                      },
+                    ),
+                  ),
+                ),
+              ),
       ),
     );
   }

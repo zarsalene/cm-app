@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cm_app/api/cm_api.dart';
 import 'package:cm_app/app/channel_chip.dart';
+import 'package:cm_app/app/motion_widgets.dart';
 import 'package:cm_app/app/strings.dart';
 import 'package:cm_app/app/theme.dart';
 import 'package:cm_app/auth/auth_bloc.dart';
@@ -18,8 +19,27 @@ class EscalationsPage extends StatefulWidget {
 }
 
 class _EscalationsPageState extends State<EscalationsPage>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   late final EscalationsCubit _cubit = context.read<EscalationsCubit>();
+  late final AnimationController _liveIcon = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 250),
+  );
+  bool _live = true;
+  String _query = '';
+  String? _channel;
+
+  void _toggleLive() {
+    setState(() => _live = !_live);
+    if (_live) {
+      unawaited(_liveIcon.reverse());
+      _cubit.startPolling();
+      unawaited(_cubit.refresh());
+    } else {
+      unawaited(_liveIcon.forward());
+      _cubit.stopPolling();
+    }
+  }
 
   @override
   void initState() {
@@ -36,6 +56,7 @@ class _EscalationsPageState extends State<EscalationsPage>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _cubit.stopPolling();
+    _liveIcon.dispose();
     super.dispose();
   }
 
@@ -46,7 +67,7 @@ class _EscalationsPageState extends State<EscalationsPage>
       case AppLifecycleState.resumed:
         unawaited(_cubit.checkNotifications());
         unawaited(_cubit.refresh());
-        _cubit.startPolling();
+        if (_live) _cubit.startPolling();
       case AppLifecycleState.paused ||
           AppLifecycleState.hidden ||
           AppLifecycleState.detached:
@@ -60,14 +81,31 @@ class _EscalationsPageState extends State<EscalationsPage>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          Strings.escalationsTitle,
-          style: context.theme.textTheme.titleLarge?.copyWith(
-            fontSize: 19,
-            fontWeight: FontWeight.w700,
-          ),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              Strings.escalationsTitle,
+              style: context.theme.textTheme.titleLarge?.copyWith(
+                fontSize: 19,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            if (_live) ...[
+              const SizedBox(width: AppSpacing.xs),
+              LiveDot(color: context.scheme.primary),
+            ],
+          ],
         ),
         actions: [
+          IconButton(
+            tooltip: _live ? Strings.pauseLive : Strings.resumeLive,
+            icon: AnimatedIcon(
+              icon: AnimatedIcons.pause_play,
+              progress: _liveIcon,
+            ),
+            onPressed: _toggleLive,
+          ),
           IconButton(
             tooltip: Strings.logout,
             icon: const Icon(Icons.logout),
@@ -81,7 +119,14 @@ class _EscalationsPageState extends State<EscalationsPage>
           children: [
             const _NotificationsBanner(),
             const _OfflineNotice(),
-            Expanded(child: _List()),
+            _FilterBar(
+              channel: _channel,
+              onQuery: (q) => setState(() => _query = q.trim().toLowerCase()),
+              onChannel: (c) => setState(() => _channel = c),
+            ),
+            Expanded(
+              child: _List(query: _query, channel: _channel),
+            ),
           ],
         ),
       ),
@@ -89,8 +134,104 @@ class _EscalationsPageState extends State<EscalationsPage>
   }
 }
 
+class _FilterBar extends StatelessWidget {
+  const _FilterBar({
+    required this.channel,
+    required this.onQuery,
+    required this.onChannel,
+  });
+
+  final String? channel;
+  final ValueChanged<String> onQuery;
+  final ValueChanged<String?> onChannel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.pageGutter,
+        AppSpacing.sm,
+        AppSpacing.pageGutter,
+        0,
+      ),
+      child: Column(
+        children: [
+          TextField(
+            onChanged: onQuery,
+            textInputAction: TextInputAction.search,
+            decoration: const InputDecoration(
+              hintText: Strings.searchHint,
+              prefixIcon: Icon(Icons.search),
+              isDense: true,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: Wrap(
+              spacing: AppSpacing.sm,
+              children: [
+                for (final (value, label) in [
+                  (null, Strings.allChannels),
+                  ('facebook', Strings.facebook),
+                  ('whatsapp', Strings.whatsapp),
+                ])
+                  ChoiceChip(
+                    label: Text(label),
+                    selected: channel == value,
+                    onSelected: (_) => onChannel(value),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NoResults extends StatelessWidget {
+  const _NoResults();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(AppSpacing.xl),
+      child: Column(
+        children: [
+          Icon(
+            Icons.search_off,
+            size: 48,
+            color: context.scheme.onSurfaceVariant,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            Strings.noResults,
+            style: context.theme.textTheme.titleMedium?.copyWith(
+              color: context.scheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _List extends StatelessWidget {
-  const _List();
+  const _List({required this.query, required this.channel});
+
+  final String query;
+  final String? channel;
+
+  bool _matches(Escalation e) {
+    if (channel != null && e.platform != channel) return false;
+    if (query.isEmpty) return true;
+    return [
+      e.customerName ?? '',
+      e.senderId,
+      e.reason,
+    ].any((text) => text.toLowerCase().contains(query));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -99,6 +240,7 @@ class _List extends StatelessWidget {
         if (state.items.isEmpty && state.loading) {
           return const _SkeletonList();
         }
+        final items = state.items.where(_matches).toList();
         return RefreshIndicator(
           onRefresh: () => context.read<EscalationsCubit>().load(),
           child: ListView(
@@ -110,27 +252,22 @@ class _List extends StatelessWidget {
                   padding: EdgeInsets.all(AppSpacing.pageGutter),
                   child: _EmptyState(),
                 ),
-              if (state.items.isNotEmpty) ...[
-                if (state.items.any((i) => i.status == 'open')) ...[
+              if (state.items.isNotEmpty && items.isEmpty) const _NoResults(),
+              if (items.isNotEmpty) ...[
+                if (items.any((i) => i.status == 'open')) ...[
                   _Section(
                     title: Strings.openSection,
-                    count: state.items.where((i) => i.status == 'open').length,
+                    count: items.where((i) => i.status == 'open').length,
                   ),
-                  for (final item in state.items.where(
-                    (i) => i.status == 'open',
-                  ))
+                  for (final item in items.where((i) => i.status == 'open'))
                     _Row(item: item),
                 ],
-                if (state.items.any((i) => i.status == 'closed')) ...[
+                if (items.any((i) => i.status == 'closed')) ...[
                   _Section(
                     title: Strings.closedSection,
-                    count: state.items
-                        .where((i) => i.status == 'closed')
-                        .length,
+                    count: items.where((i) => i.status == 'closed').length,
                   ),
-                  for (final item in state.items.where(
-                    (i) => i.status == 'closed',
-                  ))
+                  for (final item in items.where((i) => i.status == 'closed'))
                     _Row(item: item),
                 ],
               ],

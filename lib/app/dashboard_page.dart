@@ -1,10 +1,10 @@
 import 'package:cm_app/app/app_drawer.dart';
 import 'package:cm_app/app/channel_chip.dart';
+import 'package:cm_app/app/motion_widgets.dart';
 import 'package:cm_app/app/strings.dart';
 import 'package:cm_app/app/theme.dart';
 import 'package:cm_app/api/models.dart';
 import 'package:cm_app/escalations/escalations_cubit.dart';
-import 'package:cm_app/escalations/escalations_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -45,10 +45,8 @@ class DashboardPage extends StatelessWidget {
             backgroundColor: Colors.transparent,
             foregroundColor: scheme.onSurface,
             actions: [
-              IconButton(
-                icon: const Icon(Icons.refresh),
+              SpinRefreshButton(
                 onPressed: () => context.read<EscalationsCubit>().load(),
-                tooltip: 'Actualiser',
               ),
               const SizedBox(width: AppSpacing.sm),
               _ProfileAvatar(),
@@ -75,7 +73,7 @@ class DashboardPage extends StatelessWidget {
                     'Voir les ${openCount} ouverte${openCount > 1 ? 's' : ''}',
                   ),
                   backgroundColor: scheme.primary,
-                  foregroundColor: Colors.white,
+                  foregroundColor: scheme.onPrimary,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.all(
                       Radius.circular(AppRadius.button),
@@ -144,12 +142,21 @@ class _DashboardBody extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.xs),
-                Text(
-                  '${state.items.length} escalade${state.items.length > 1 ? 's' : ''} '
-                  'au total.',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
+                Row(
+                  children: [
+                    LiveDot(color: scheme.primary),
+                    const SizedBox(width: AppSpacing.xs),
+                    Expanded(
+                      child: Text(
+                        '${state.items.length} escalade'
+                        '${state.items.length > 1 ? 's' : ''} au total · '
+                        '${Strings.liveLabel.toLowerCase()}',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -306,7 +313,7 @@ class _StatRow extends StatelessWidget {
             Expanded(
               child: _StatCard(
                 title: Strings.openEscalations,
-                value: openCount.toString(),
+                value: openCount,
                 delta: under15 > 0
                     ? '$under15 urgente${under15 > 1 ? 's' : ''}'
                     : 'Aucune urgente',
@@ -318,7 +325,7 @@ class _StatRow extends StatelessWidget {
             Expanded(
               child: _StatCard(
                 title: Strings.closedEscalations,
-                value: closedCount.toString(),
+                value: closedCount,
                 delta: 'résolues',
                 color: scheme.primary,
                 icon: Icons.check_circle_outline,
@@ -332,7 +339,7 @@ class _StatRow extends StatelessWidget {
             Expanded(
               child: _StatCard(
                 title: 'Total',
-                value: total.toString(),
+                value: total,
                 delta: 'escalades',
                 color: scheme.primary,
                 icon: Icons.list_alt,
@@ -342,9 +349,8 @@ class _StatRow extends StatelessWidget {
             Expanded(
               child: _StatCard(
                 title: 'Taux de clôture',
-                value: total > 0
-                    ? '${(closedCount / total * 100).round()}%'
-                    : '0%',
+                value: total > 0 ? (closedCount / total * 100).round() : 0,
+                suffix: '%',
                 delta: 'des escalades',
                 color: scheme.primary,
                 icon: Icons.timeline,
@@ -364,10 +370,12 @@ class _StatCard extends StatelessWidget {
     required this.delta,
     required this.color,
     required this.icon,
+    this.suffix = '',
   });
 
   final String title;
-  final String value;
+  final int value;
+  final String suffix;
   final String delta;
   final Color color;
   final IconData icon;
@@ -376,6 +384,7 @@ class _StatCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final still = MediaQuery.disableAnimationsOf(context);
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
@@ -397,14 +406,28 @@ class _StatCard extends StatelessWidget {
               color: color.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
-            child: Center(child: Icon(icon, color: color, size: 18)),
+            child: Center(
+              child: TweenAnimationBuilder<double>(
+                tween: Tween(begin: still ? 1 : 0, end: 1),
+                duration: const Duration(milliseconds: 700),
+                curve: Curves.easeOutBack,
+                builder: (context, t, child) =>
+                    Transform.scale(scale: t, child: child),
+                child: Icon(icon, color: color, size: 18),
+              ),
+            ),
           ),
           const SizedBox(height: AppSpacing.md),
-          Text(
-            value,
-            style: theme.textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w800,
-              color: scheme.onSurface,
+          TweenAnimationBuilder<int>(
+            tween: IntTween(begin: still ? value : 0, end: value),
+            duration: still ? Duration.zero : const Duration(milliseconds: 900),
+            curve: Curves.easeOutCubic,
+            builder: (context, v, _) => Text(
+              '$v$suffix',
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: scheme.onSurface,
+              ),
             ),
           ),
           const SizedBox(height: AppSpacing.xs),
@@ -447,26 +470,28 @@ class _SectionHeader extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: scheme.onSurface,
-              ),
-            ),
-            if (subtitle != null) ...[
-              const SizedBox(height: AppSpacing.xs),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               Text(
-                subtitle!,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
+                title,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: scheme.onSurface,
                 ),
               ),
+              if (subtitle != null) ...[
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  subtitle!,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
         if (onViewAll != null)
           TextButton(
@@ -499,13 +524,13 @@ class _QuickActions extends StatelessWidget {
       crossAxisCount: 2,
       mainAxisSpacing: AppSpacing.md,
       crossAxisSpacing: AppSpacing.md,
-      childAspectRatio: 1.6,
+      childAspectRatio: 1.2,
       children: [
         _ActionTile(
           icon: Icons.list_alt,
           label: 'Voir les escalades',
           color: scheme.primary,
-          glow: AppColors.lightTealGlow,
+          glow: AppColors.lightPrimaryGlow,
           onTap: onViewEscalations,
         ),
         _ActionTile(
@@ -694,16 +719,11 @@ class _RecentRow extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
-        subtitle: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              time,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: scheme.onSurfaceVariant,
-              ),
-            ),
-          ],
+        subtitle: Text(
+          time,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: scheme.onSurfaceVariant,
+          ),
         ),
         trailing: Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),

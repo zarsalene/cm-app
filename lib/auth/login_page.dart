@@ -1,3 +1,4 @@
+import 'package:cm_app/app/brand_backdrop.dart';
 import 'package:cm_app/app/credit_line.dart';
 import 'package:cm_app/app/strings.dart';
 import 'package:cm_app/app/theme.dart';
@@ -72,16 +73,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [AppColors.lightPrimary, AppColors.lightDeepTeal],
-          ),
-        ),
+      body: BrandBackdrop(
         child: SafeArea(
           child: FadeTransition(
             opacity: _fade,
@@ -99,23 +91,6 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.all(AppSpacing.lg),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.10),
-                          borderRadius: BorderRadius.all(
-                            Radius.circular(AppRadius.hero),
-                          ),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.22),
-                            width: 1,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.12),
-                              blurRadius: 24,
-                              offset: const Offset(0, 10),
-                            ),
-                          ],
-                        ),
                         child: Column(
                           children: [
                             Container(
@@ -128,9 +103,11 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                                 ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.18),
-                                    blurRadius: 20,
-                                    offset: const Offset(0, 8),
+                                    color: AppColors.logoTeal.withValues(
+                                      alpha: 0.25,
+                                    ),
+                                    blurRadius: 28,
+                                    offset: const Offset(0, 10),
                                   ),
                                 ],
                               ),
@@ -150,7 +127,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                               Strings.appName,
                               textAlign: TextAlign.center,
                               style: theme.textTheme.headlineMedium?.copyWith(
-                                color: Colors.white,
+                                color: scheme.primary,
                                 fontSize: 24,
                                 fontWeight: FontWeight.w700,
                                 letterSpacing: -0.5,
@@ -158,11 +135,10 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                             ),
                             const SizedBox(height: AppSpacing.xs),
                             Text(
-                              'Gérez vos conversations clients '
-                              'en un seul endroit',
+                              Strings.tagline,
                               textAlign: TextAlign.center,
                               style: theme.textTheme.bodyMedium?.copyWith(
-                                color: Colors.white.withValues(alpha: 0.88),
+                                color: scheme.onSurfaceVariant,
                                 fontSize: 14,
                               ),
                             ),
@@ -274,7 +250,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                                 style: FilledButton.styleFrom(
                                   minimumSize: const Size.fromHeight(56),
                                   backgroundColor: scheme.primary,
-                                  foregroundColor: Colors.white,
+                                  foregroundColor: scheme.onPrimary,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.all(
                                       Radius.circular(AppRadius.button),
@@ -358,7 +334,7 @@ class _PremiumInput extends StatelessWidget {
       obscureText: obscureText,
       decoration: InputDecoration(
         hintText: hintText,
-        prefixIcon: Icon(icon, color: AppColors.lightPrimary),
+        prefixIcon: Icon(icon, color: scheme.primary),
         suffixIcon: toggleVisibility != null
             ? IconButton(
                 icon: Icon(

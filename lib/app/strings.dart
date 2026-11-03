@@ -30,6 +30,21 @@ abstract class Strings {
   static const newAlert = 'Nouvelle alerte client';
   static const notificationsOff = 'Notifications désactivées';
   static const appName = 'Z-Smart-CM';
+  static const liveLabel = 'En direct';
+  static const refresh = 'Actualiser';
+  static const pauseLive = 'Mettre le direct en pause';
+  static const resumeLive = 'Reprendre le direct';
+  static const searchHint = 'Rechercher un client…';
+  static const allChannels = 'Tous';
+  static const noResults = 'Aucun résultat';
+  static const quickRepliesLabel = 'Réponses rapides';
+  static const quickReplies = [
+    'Bonjour, je m’en occupe tout de suite.',
+    'Pouvez-vous préciser votre numéro de commande ?',
+    'Merci pour votre patience, je vérifie.',
+    'Votre demande est résolue. Bonne journée !',
+  ];
+  static const tagline = 'Gérez vos conversations clients en un seul endroit';
   static const developedBy = 'Développé par';
   static const developedByMicrozed = 'Développé par Microzed';
   static const microzed = 'Microzed';

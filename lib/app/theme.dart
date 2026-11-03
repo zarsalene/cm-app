@@ -3,25 +3,27 @@ import 'package:flutter/material.dart';
 const _fontFamily = 'IBM Plex Sans Arabic';
 
 abstract class AppColors {
-  static const seed = Color(0xFF0F766E);
+  static const seed = Color(0xFF0D7A77);
+  static const logoTeal = Color(0xFF0D7A77);
+  static const logoOrange = Color(0xFFE68003);
   static const deepTeal = Color(0xFF0A4F49);
-  static const alertAmber = Color(0xFFD97706);
+  static const alertAmber = Color(0xFFE68003);
   static const errorLight = Color(0xFFB91C1C);
   static const onErrorLight = Color(0xFFFFFFFF);
   static const errorDark = Color(0xFFFCA5A5);
   static const onErrorDark = Color(0xFF450A0A);
   static const facebook = Color(0xFF1877F2);
-  static const onFacebook = Color(0xFF000000);
+  static const onFacebook = Color(0xFFFFFFFF);
   static const whatsapp = Color(0xFF25D366);
   static const onWhatsapp = Color(0xFF0B3D20);
 
-  static const Color lightPrimary = Color(0xFF0F766E);
+  static const Color lightPrimary = Color(0xFF0D7A77);
   static const Color darkPrimary = Color(0xFF2DB1A5);
   static const Color lightPrimaryContainer = Color(0xFFD3EEEA);
   static const Color darkPrimaryContainer = Color(0xFF0F3F3A);
   static const Color lightDeepTeal = Color(0xFF0A4F49);
   static const Color darkDeepTeal = Color(0xFF0A4F49);
-  static const Color lightAccent = Color(0xFFD97706);
+  static const Color lightAccent = Color(0xFFE68003);
   static const Color darkAccent = Color(0xFFF3C06B);
   static const Color lightSecondaryContainer = Color(0xFFFBE8C8);
   static const Color darkSecondaryContainer = Color(0xFF3A2C12);
@@ -45,10 +47,10 @@ abstract class AppColors {
   static const Color darkCardElevated = Color(0xFF1A2522);
   static const Color lightGlass = Color(0x1AFFFFFF);
   static const Color darkGlass = Color(0x1A000000);
-  static const Color lightAmberGlow = Color(0x1AD97706);
+  static const Color lightAmberGlow = Color(0x1AE68003);
   static const Color darkAmberGlow = Color(0x1AF3C06B);
-  static const Color lightTealGlow = Color(0x1A0F766E);
-  static const Color darkTealGlow = Color(0x1A2DB1A5);
+  static const Color lightPrimaryGlow = Color(0x1A0D7A77);
+  static const Color darkPrimaryGlow = Color(0x1A2DB1A5);
 }
 
 abstract class AppShadow {
@@ -62,8 +64,8 @@ abstract class AppShadow {
     blurRadius: 24,
     offset: Offset(0, 10),
   );
-  static const glowTeal = BoxShadow(
-    color: AppColors.lightTealGlow,
+  static const glowPrimary = BoxShadow(
+    color: AppColors.lightPrimaryGlow,
     blurRadius: 20,
     offset: Offset(0, 0),
   );

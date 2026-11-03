@@ -32,8 +32,7 @@ class AuthRefresh extends ChangeNotifier {
 /// Holds the splash for a minimum time. Never holds an alert: [release]
 /// ends the hold at once (push tap, reduced motion).
 class SplashGate extends ChangeNotifier {
-  new({required bool hold, Duration minimum = const Duration(seconds: 1)})
-    : _done = !hold {
+  new({required bool hold, Duration minimum = splashDuration}) : _done = !hold {
     if (hold) {
       // Counted from the first frame.
       WidgetsBinding.instance.addPostFrameCallback((_) {
