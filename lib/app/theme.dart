@@ -28,12 +28,8 @@ abstract class AppSpacing {
 abstract class AppTheme {
   static ThemeData get light => ThemeData(
     useMaterial3: true,
-    colorScheme: ColorScheme.fromSeed(
-      seedColor: AppColors.seed,
-    ).copyWith(
-      error: AppColors.errorLight,
-      onError: AppColors.onErrorLight,
-    ),
+    colorScheme: ColorScheme.fromSeed(seedColor: AppColors.seed)
+        .copyWith(error: AppColors.errorLight, onError: AppColors.onErrorLight),
   );
 
   static ThemeData get dark => ThemeData(
@@ -41,9 +37,6 @@ abstract class AppTheme {
     colorScheme: ColorScheme.fromSeed(
       seedColor: AppColors.seed,
       brightness: Brightness.dark,
-    ).copyWith(
-      error: AppColors.errorDark,
-      onError: AppColors.onErrorDark,
-    ),
+    ).copyWith(error: AppColors.errorDark, onError: AppColors.onErrorDark),
   );
 }
