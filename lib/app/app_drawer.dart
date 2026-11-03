@@ -115,8 +115,11 @@ class AppDrawer extends StatelessWidget {
   }
 
   void _logout(BuildContext context) {
+    // Dispatch logout and close the drawer. The router's authRedirect
+    // automatically sends the user to /login once the state becomes
+    // Unauthenticated — no manual navigation needed here.
     context.read<AuthBloc>().add(const LogoutRequested());
-    context.go('/login');
+    Navigator.of(context).pop();
   }
 }
 
