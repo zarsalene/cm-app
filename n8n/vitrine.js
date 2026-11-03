@@ -506,7 +506,7 @@ const html = `<!doctype html>
         <span class="chip">⚡ Mise à jour en direct</span>
         <span class="chip">🔎 Recherche &amp; filtres</span>
         <span class="chip">✨ Réponses rapides</span>
-        <span class="chip">Version 3.1.0</span>
+        <span class="chip">Version 3.1.1</span>
       </div>
     </div>
   </div>
