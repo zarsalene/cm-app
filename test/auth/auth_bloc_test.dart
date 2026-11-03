@@ -34,7 +34,9 @@ void main() {
             when(() => api.login(any(), any()))
                 .thenThrow(const InvalidLoginException()),
         build: () => AuthBloc(api, store, push),
-        act: (bloc) => bloc.add(const LoginSubmitted('cm', 'wrong')),
+        act: (bloc) => bloc.add(
+          const LoginSubmitted(username: 'cm', password: 'wrong', rememberMe: false),
+        ),
         expect: () => const [
           LoginInProgress(),
           LoginFailure('Identifiant ou mot de passe incorrect'),

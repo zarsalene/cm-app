@@ -55,7 +55,11 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
       return;
     }
     context.read<AuthBloc>().add(
-      LoginSubmitted(_username.text.trim(), _password.text),
+      LoginSubmitted(
+        username: _username.text.trim(),
+        password: _password.text,
+        rememberMe: _rememberMe,
+      ),
     );
   }
 

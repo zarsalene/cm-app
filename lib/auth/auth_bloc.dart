@@ -15,10 +15,13 @@ sealed class AuthEvent extends Equatable {
 /// App start: restore the stored session, if any.
 final class const AuthStarted() extends AuthEvent;
 
-final class const LoginSubmitted(final String username, final String password)
-    extends AuthEvent {
+final class const LoginSubmitted({
+  required final String username,
+  required final String password,
+  required final bool rememberMe,
+}) extends AuthEvent {
   @override
-  List<Object> get props => [username, password];
+  List<Object> get props => [username, password, rememberMe];
 
   // Never print the password.
   @override
@@ -83,6 +86,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final PushService _push;
 
   Future<void> _onStarted(AuthStarted event, Emitter<AuthState> emit) async {
+    // If the user didn't check "Remember me", never auto-restore the session.
+    final rememberMe = await _store.readRememberMe();
+    if (!rememberMe) {
+      emit(const Unauthenticated());
+      return;
+    }
+
     String? token;
     String? username;
     try {
@@ -112,7 +122,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
     try {
       final session = await _api.login(username, event.password);
-      await _store.write(session.token, session.username);
+      await _store.write(
+        token: session.token,
+        username: session.username,
+        rememberMe: event.rememberMe,
+      );
       emit(Authenticated(session.username));
     } on InvalidLoginException {
       emit(const LoginFailure(invalidLogin));
