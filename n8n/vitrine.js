@@ -91,7 +91,7 @@ footer a{color:var(--muted)}
 <body>
 <nav class="nav">
   <div class="container nav-inner">
-    <a class="brand" href="#top"><span class="logo">Z</span>Z-Smart-CM</a>
+    <a class="brand" href="#top"><img class="logo-img" src="__APP_ICON__" alt="Z-Smart-CM" height="28">Z-Smart-CM</a>
     <div class="nav-links">
       <a href="#features">Fonctionnalités</a>
       <a href="#how">Fonctionnement</a>
@@ -109,7 +109,7 @@ footer a{color:var(--muted)}
       <p class="lead">Z-Smart-CM alerte votre Community Manager dès qu'une conversation Messenger ou WhatsApp lui échappe. Il prend la main, répond, et rend la conversation au bot en un clic.</p>
       <div class="hero-cta">
         <a class="btn btn-primary" href="https://n8ntest.microzed.tn/webhook/z-smart-cm-download" rel="noopener">Télécharger l'APK</a>
-        <a class="btn btn-ghost" href="#how">Voir le fonctionnement</a>
+        <a class="btn btn-ghost" href="https://n8ntest.microzed.tn/webhook/z-smart-cm-download" rel="noopener">Télécharger l'APK</a>
       </div>
       <div class="chips">
         <span class="chip">🔔 Alertes push</span>
@@ -224,7 +224,7 @@ footer a{color:var(--muted)}
 
 <footer>
   <div class="container foot-inner">
-    <span>Microzed © 2026 — Z-Smart-CM : encadrer le bot sans quitter la conversation.</span>
+    <span><img src="assets/logo/microzed.jpeg" alt="Microzed" height="20" style="vertical-align:middle;margin-right:8px;border-radius:4px">Microzed © 2026 — Z-Smart-CM : encadrer le bot sans quitter la conversation.</span>
     <a href="https://microzed.tn" target="_blank" rel="noopener">microzed.tn</a>
   </div>
 </footer>
