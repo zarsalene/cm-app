@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cm_app/api/cm_api.dart';
 import 'package:cm_app/app/router.dart';
+import 'package:cm_app/app/strings.dart';
 import 'package:cm_app/app/theme.dart';
 import 'package:cm_app/auth/auth_bloc.dart';
 import 'package:cm_app/auth/token_store.dart';
@@ -57,13 +58,19 @@ class _AppView extends StatefulWidget {
 }
 
 class _AppViewState extends State<_AppView> {
+  /// A tap older than this is stale: the alert may be handled already.
+  static const _pendingMaxAge = Duration(minutes: 30);
+
+  final _messenger = GlobalKey<ScaffoldMessengerState>();
   late final AuthRefresh _refresh;
   late final GoRouter _router;
   late final StreamSubscription<PushTarget> _opened;
+  late final StreamSubscription<void> _foreground;
   late final StreamSubscription<AuthState> _auth;
 
   /// A tapped alert that arrived before login; opened right after it.
   PushTarget? _pending;
+  DateTime? _pendingAt;
 
   @override
   void initState() {
@@ -77,17 +84,29 @@ class _AppViewState extends State<_AppView> {
         _openChat(target);
       } else {
         _pending = target;
+        _pendingAt = DateTime.now();
       }
+    });
+    _foreground = push.foreground.listen((_) {
+      if (auth.state is Authenticated) _showAlert();
     });
     var wasAuthenticated = auth.state is Authenticated;
     _auth = auth.stream.listen((state) {
       final isAuthenticated = state is Authenticated;
       if (isAuthenticated) {
         final target = _pending;
+        final at = _pendingAt;
         _pending = null;
-        if (target != null) _openChat(target);
+        _pendingAt = null;
+        if (target != null &&
+            at != null &&
+            DateTime.now().difference(at) < _pendingMaxAge) {
+          _openChat(target);
+        }
       } else if (wasAuthenticated) {
-        _pending = null; // Logout: never open a chat for the next login.
+        // Logout: never open a chat for the next login.
+        _pending = null;
+        _pendingAt = null;
       }
       wasAuthenticated = isAuthenticated;
     });
@@ -98,9 +117,26 @@ class _AppViewState extends State<_AppView> {
     _router.go('/chat/${target.platform}/${target.senderId}');
   }
 
+  /// Android shows no system notification while the app is open.
+  void _showAlert() {
+    try {
+      _messenger.currentState?.showSnackBar(
+        SnackBar(
+          content: Semantics(
+            liveRegion: true,
+            child: const Text(Strings.newAlert),
+          ),
+        ),
+      );
+    } on Object {
+      // No messenger or no Scaffold yet: the list reload still runs.
+    }
+  }
+
   @override
   void dispose() {
     unawaited(_opened.cancel());
+    unawaited(_foreground.cancel());
     unawaited(_auth.cancel());
     _router.dispose();
     _refresh.dispose();
@@ -110,6 +146,7 @@ class _AppViewState extends State<_AppView> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
+      scaffoldMessengerKey: _messenger,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
       localizationsDelegates: AppLocalizations.localizationsDelegates,

@@ -27,6 +27,8 @@ abstract class Strings {
   static const facebook = 'Facebook';
   static const whatsapp = 'WhatsApp';
   static const justNow = "à l'instant";
+  static const newAlert = 'Nouvelle alerte client';
+  static const notificationsOff = 'Notifications désactivées';
 
   /// Error text for a failed call.
   static String errorFor(Object error) => switch (error) {

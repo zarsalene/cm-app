@@ -64,7 +64,7 @@ GoRouter createRouter(
             final cubit = EscalationsCubit(
               api,
               onUnauthorized: onUnauthorized,
-              alerts: push.foreground,
+              push: push,
             );
             unawaited(cubit.load());
             return cubit;

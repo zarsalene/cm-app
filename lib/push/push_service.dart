@@ -35,6 +35,9 @@ abstract class PushService {
 
   /// Alerts received while the app is in the foreground.
   Stream<void> get foreground;
+
+  /// False when the user refused (or turned off) notifications.
+  Future<bool> get notificationsEnabled;
 }
 
 /// Does nothing. Used when Firebase is not available (local build).
@@ -53,6 +56,9 @@ class NoopPushService implements PushService {
 
   @override
   Stream<void> get foreground => const Stream.empty();
+
+  @override
+  Future<bool> get notificationsEnabled async => true;
 }
 
 /// Firebase Cloud Messaging on the `cm_bosphore` topic.
@@ -95,4 +101,13 @@ class FcmPushService implements PushService {
 
   @override
   Stream<void> get foreground => FirebaseMessaging.onMessage.map((_) {});
+
+  @override
+  Future<bool> get notificationsEnabled async {
+    final settings = await _messaging.getNotificationSettings();
+    return switch (settings.authorizationStatus) {
+      AuthorizationStatus.authorized || AuthorizationStatus.provisional => true,
+      _ => false,
+    };
+  }
 }

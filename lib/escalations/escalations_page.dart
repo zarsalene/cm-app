@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cm_app/api/cm_api.dart';
 import 'package:cm_app/app/channel_chip.dart';
 import 'package:cm_app/app/strings.dart';
@@ -9,8 +11,38 @@ import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// Escalation list. Reads [EscalationsCubit] and [AuthBloc] from the tree.
-class EscalationsPage extends StatelessWidget {
+class EscalationsPage extends StatefulWidget {
   const new({super.key});
+
+  @override
+  State<EscalationsPage> createState() => _EscalationsPageState();
+}
+
+class _EscalationsPageState extends State<EscalationsPage>
+    with WidgetsBindingObserver {
+  late final EscalationsCubit _cubit = context.read<EscalationsCubit>();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    unawaited(_cubit.checkNotifications());
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (_cubit.isClosed) return;
+    // The user may have changed the permission in the settings.
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_cubit.checkNotifications());
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -26,28 +58,78 @@ class EscalationsPage extends StatelessWidget {
           ),
         ],
       ),
-      body: SafeArea(
-        child: BlocBuilder<EscalationsCubit, EscalationsState>(
-          builder: (context, state) {
-            if (state.items.isEmpty && state.loading) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            return RefreshIndicator(
-              onRefresh: () => context.read<EscalationsCubit>().load(),
-              child: ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                children: [
-                  if (state.error case final error?) _ErrorBanner(error: error),
-                  if (state.items.isEmpty && state.error == null)
-                    const Padding(
-                      padding: EdgeInsets.all(AppSpacing.lg),
-                      child: Center(child: Text(Strings.noEscalations)),
-                    ),
-                  for (final item in state.items) _Row(item: item),
-                ],
+      body: const SafeArea(
+        child: Column(
+          children: [
+            _NotificationsNotice(),
+            Expanded(child: _List()),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _List extends StatelessWidget {
+  const new();
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<EscalationsCubit, EscalationsState>(
+      builder: (context, state) {
+        if (state.items.isEmpty && state.loading) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        return RefreshIndicator(
+          onRefresh: () => context.read<EscalationsCubit>().load(),
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            children: [
+              if (state.error case final error?) _ErrorBanner(error: error),
+              if (state.items.isEmpty && state.error == null)
+                const Padding(
+                  padding: EdgeInsets.all(AppSpacing.lg),
+                  child: Center(child: Text(Strings.noEscalations)),
+                ),
+              for (final item in state.items) _Row(item: item),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Persistent while the user refuses notifications: alerts would be missed.
+class _NotificationsNotice extends StatelessWidget {
+  const new();
+
+  @override
+  Widget build(BuildContext context) {
+    final off = context.select<EscalationsCubit, bool>(
+      (c) => c.state.notificationsOff,
+    );
+    if (!off) return const SizedBox.shrink();
+    final scheme = Theme.of(context).colorScheme;
+    return Semantics(
+      liveRegion: true,
+      child: ColoredBox(
+        color: scheme.errorContainer,
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Row(
+            children: [
+              Icon(Icons.notifications_off, color: scheme.onErrorContainer),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  Strings.notificationsOff,
+                  style: Theme.of(context).textTheme.bodyLarge
+                      ?.copyWith(color: scheme.onErrorContainer),
+                ),
               ),
-            );
-          },
+            ],
+          ),
         ),
       ),
     );

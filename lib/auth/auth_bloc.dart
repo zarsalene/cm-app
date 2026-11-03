@@ -73,6 +73,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
   static const _storageTimeout = Duration(seconds: 5);
   static const _logoutTimeout = Duration(seconds: 3);
+  // Offline topic calls must not hang login or logout. The FCM SDK keeps the
+  // call queued, so a timed-out call still completes later.
+  static const _subscribeTimeout = Duration(seconds: 5);
+  static const _unsubscribeTimeout = Duration(seconds: 3);
 
   final CmApi _api;
   final TokenStore _store;
@@ -93,7 +97,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
     emit(Authenticated(username));
     // Topic subscribe is safe to repeat on every start.
-    await _quietly(_push.subscribe);
+    await _quietly(() => _push.subscribe().timeout(_subscribeTimeout));
   }
 
   Future<void> _onLoginSubmitted(
@@ -120,7 +124,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       emit(const LoginFailure(otherError));
       return;
     }
-    await _quietly(_push.subscribe);
+    await _quietly(() => _push.subscribe().timeout(_subscribeTimeout));
   }
 
   Future<void> _onLogoutRequested(
@@ -130,7 +134,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     // Before the delete: logout still needs the bearer token.
     await _quietly(() => _api.logout().timeout(_logoutTimeout));
     await _quietly(_store.delete);
-    await _quietly(_push.unsubscribe);
+    await _quietly(() => _push.unsubscribe().timeout(_unsubscribeTimeout));
     emit(const Unauthenticated());
   }
 
@@ -142,7 +146,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     if (state is! Authenticated) return;
     await _quietly(_store.delete);
     emit(const Unauthenticated());
-    await _quietly(_push.unsubscribe);
+    await _quietly(() => _push.unsubscribe().timeout(_unsubscribeTimeout));
   }
 
   // Best effort: a failing call never blocks login or logout.
