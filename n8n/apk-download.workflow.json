@@ -3,8 +3,8 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Distribuer l'APK sans compte GitHub\n\n**1. Copier l'APK sur le SERVEUR n8n**\n```\ndocker cp app-production-release.apk n8n:/data/apk/Z-Smart-CM.apk\n```\n(si le container tourne deja, docker cp suffit - pas de redemarrage requis)\n\n**2. Ajuster le chemin** dans le noeud \"Read APK File\" si besoin.\n\n**3. Activer** ce workflow.\n\nLes agents ouvrent ensuite sur leur telephone :\n`https://n8ntest.microzed.tn/webhook/z-smart-cm-download`\n-> l'APK se telecharge, puis l'installer (autoriser l'installation d'app inconnues).",
-        "height": 340,
+        "content": "## Telechargement APK Z-Smart-CM\n\nCe workflow redirige vers la release GitHub v2.0.0.\n\nURL publique : `https://n8ntest.microzed.tn/webhook/z-smart-cm-download`\nCible : https://github.com/zarsalene/cm-app/releases/download/v2.0.0/Z-Smart-CM.apk\n\nAucun fichier a copier sur le serveur n8n.\n\n**3. Activer** ce workflow.\n",
+        "height": 240,
         "width": 400
       },
       "id": "b2c3d4e5-0000-4a5b-8c6d-9e0f1a2b3c4e",
@@ -35,41 +35,26 @@
     },
     {
       "parameters": {
-        "operation": "read",
-        "fileSelector": "/data/apk/Z-Smart-CM.apk",
-        "options": {}
-      },
-      "id": "b2c3d4e5-0002-4a5b-8c6d-9e0f1a2b3c4e",
-      "name": "Read APK File",
-      "type": "n8n-nodes-base.readWriteFile",
-      "typeVersion": 1,
-      "position": [
-        80,
-        0
-      ]
-    },
-    {
-      "parameters": {
-        "respondWith": "binary",
-        "responseBinaryPropertyName": "data",
+        "respondWith": "text",
+        "responseBody": "",
         "options": {
-          "responseCode": 200,
+          "responseCode": 302,
           "responseHeaders": {
             "entries": [
               {
-                "name": "Content-Type",
-                "value": "application/vnd.android.package-archive"
+                "name": "Location",
+                "value": "https://github.com/zarsalene/cm-app/releases/download/v2.0.0/Z-Smart-CM.apk"
               },
               {
-                "name": "Content-Disposition",
-                "value": "attachment; filename=\"Z-Smart-CM.apk\""
+                "name": "Cache-Control",
+                "value": "no-store"
               }
             ]
           }
         }
       },
       "id": "b2c3d4e5-0003-4a5b-8c6d-9e0f1a2b3c4e",
-      "name": "Respond APK File",
+      "name": "Redirect to GitHub Release",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
@@ -83,18 +68,7 @@
       "main": [
         [
           {
-            "node": "Read APK File",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Read APK File": {
-      "main": [
-        [
-          {
-            "node": "Respond APK File",
+            "node": "Redirect to GitHub Release",
             "type": "main",
             "index": 0
           }
