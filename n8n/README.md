@@ -2,6 +2,8 @@
 
 Workflows n8n à importer (Workflows → ⋯ → *Import from File*), puis **activer**.
 
+Plus simple : `python -I n8n/push_pages.py` (env `N8N_API_URL` / `N8N_API_KEY`, mêmes variables que `push_cm_app.py`) — crée les deux workflows, met à jour s'ils existent, **active la vitrine** et laisse le téléchargement APK inactif.
+
 ## 1. Vitrine — `vitrine_cm_app.workflow.json`
 
 - URL publique une fois activée : `https://n8ntest.microzed.tn/webhook/z-smart-cm`
