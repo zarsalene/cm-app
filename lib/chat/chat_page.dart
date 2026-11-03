@@ -8,6 +8,7 @@ import 'package:cm_app/chat/chat_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 
 class ChatPage extends StatefulWidget {
   const ChatPage({super.key});
@@ -76,6 +77,13 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
   Widget build(BuildContext context) {
     final sending = context.select<ChatCubit, bool>((c) => c.state.sending);
     return AppBar(
+      // Opened from a push alert there is nothing to pop: go to the list.
+      leading: IconButton(
+        tooltip: Strings.back,
+        icon: const Icon(Icons.arrow_back),
+        onPressed: () =>
+            context.canPop() ? context.pop() : context.go('/escalations'),
+      ),
       title: Text(
         chat == null
             ? Strings.chatTitle
@@ -436,8 +444,11 @@ class _MessageListState extends State<_MessageList> {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(AppSpacing.pageGutter),
             itemCount: messages.length,
-            itemBuilder: (context, i) =>
-                _BubbleEntry(message: messages[i], index: i),
+            itemBuilder: (context, i) => _BubbleEntry(
+              message: messages[i],
+              previous: i > 0 ? messages[i - 1] : null,
+              next: i < messages.length - 1 ? messages[i + 1] : null,
+            ),
           ),
         ),
         if (_showScrollToBottom)
@@ -455,11 +466,39 @@ class _MessageListState extends State<_MessageList> {
   }
 }
 
+/// Removes what must never reach the screen from a bot message: the
+/// `[[ESCALATE]]` token and prompt memory (`{"history": [...]}`) that leaked
+/// into the text. Falls back to the original when nothing readable is left.
+String cleanMessageText(String text) {
+  var cleaned = text.replaceAll('[[ESCALATE]]', '');
+  final leak = cleaned.indexOf(RegExp(r'\{\s*"history"'));
+  if (leak >= 0) cleaned = cleaned.substring(0, leak);
+  cleaned = cleaned.trim();
+  return cleaned.isEmpty ? text : cleaned;
+}
+
+bool _sameDay(DateTime a, DateTime b) =>
+    a.year == b.year && a.month == b.month && a.day == b.day;
+
+String _dayLabel(DateTime day, {DateTime? now}) {
+  final today = now ?? DateTime.now();
+  final diff = DateTime(
+    today.year,
+    today.month,
+    today.day,
+  ).difference(DateTime(day.year, day.month, day.day)).inDays;
+  if (diff == 0) return Strings.today;
+  if (diff == 1) return Strings.yesterday;
+  String two(int n) => n.toString().padLeft(2, '0');
+  return '${two(day.day)}/${two(day.month)}/${day.year}';
+}
+
 class _BubbleEntry extends StatelessWidget {
-  const _BubbleEntry({required this.message, required this.index});
+  const _BubbleEntry({required this.message, this.previous, this.next});
 
   final ChatMessage message;
-  final int index;
+  final ChatMessage? previous;
+  final ChatMessage? next;
 
   @override
   Widget build(BuildContext context) {
@@ -468,20 +507,67 @@ class _BubbleEntry extends StatelessWidget {
     final isBot = !isCustomer && chat?.mode == ChatMode.bot;
     final isCm = !isCustomer && chat?.mode == ChatMode.human;
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.vertical8),
-      child: Column(
-        crossAxisAlignment: isCustomer
-            ? CrossAxisAlignment.start
-            : CrossAxisAlignment.end,
-        children: [
-          _Bubble(
+    final at = message.at?.toLocal();
+    final previousAt = previous?.at?.toLocal();
+    final newDay =
+        at != null && (previousAt == null || !_sameDay(at, previousAt));
+    final groupedWithPrevious =
+        previous != null &&
+        !newDay &&
+        (previous!.role == 'customer') == isCustomer;
+    final lastOfGroup =
+        next == null ||
+        (next!.role == 'customer') != isCustomer ||
+        (at != null && next!.at != null && !_sameDay(at, next!.at!.toLocal()));
+
+    return Column(
+      children: [
+        if (newDay) _DayChip(label: _dayLabel(at!)),
+        Padding(
+          padding: EdgeInsets.only(
+            top: groupedWithPrevious ? 2 : AppSpacing.vertical12,
+          ),
+          child: _Bubble(
             message: message,
             isCustomer: isCustomer,
             isBot: isBot,
             isCm: isCm,
+            lastOfGroup: lastOfGroup,
           ),
-        ],
+        ),
+      ],
+    );
+  }
+}
+
+class _DayChip extends StatelessWidget {
+  const _DayChip({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.scheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(AppRadius.chip),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.xs,
+          ),
+          child: Text(
+            label,
+            style: context.theme.textTheme.labelMedium?.copyWith(
+              color: scheme.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -493,6 +579,7 @@ class _Bubble extends StatelessWidget {
     required this.isCustomer,
     required this.isBot,
     required this.isCm,
+    required this.lastOfGroup,
   });
 
   final ChatMessage message;
@@ -500,87 +587,142 @@ class _Bubble extends StatelessWidget {
   final bool isBot;
   final bool isCm;
 
+  /// Only the last bubble of a run shows the sender label, the time and the
+  /// speech-bubble corner.
+  final bool lastOfGroup;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = context.scheme;
-    final direction = _detectDirection(message.text);
+    final text = isCustomer ? message.text : cleanMessageText(message.text);
+    final direction = _detectDirection(text);
     final at = message.at?.toLocal();
     final time = at == null
         ? null
         : '${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}';
 
-    Color background;
-    Color foreground;
+    final Color foreground;
+    final Color? solid;
+    Gradient? gradient;
     if (isCustomer) {
-      background = scheme.surfaceContainer;
+      solid = scheme.surfaceContainer;
       foreground = scheme.onSurface;
     } else if (isBot) {
-      background = scheme.surfaceContainerHigh;
+      solid = scheme.surfaceContainerHigh;
       foreground = scheme.onSurfaceVariant;
     } else {
-      background = scheme.primary;
+      solid = null;
+      gradient = LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          scheme.primary,
+          Color.lerp(scheme.primary, AppColors.deepTeal, 0.35)!,
+        ],
+      );
       foreground = scheme.onPrimary;
     }
 
-    final alignment = isCustomer ? Alignment.centerLeft : Alignment.centerRight;
+    // Speech-bubble corner on the sender's side, last bubble of a run only.
+    const big = Radius.circular(20);
+    const tail = Radius.circular(6);
+    final radius = BorderRadius.only(
+      topLeft: big,
+      topRight: big,
+      bottomLeft: isCustomer && lastOfGroup ? tail : big,
+      bottomRight: !isCustomer && lastOfGroup ? tail : big,
+    );
 
     return Align(
-      alignment: alignment,
+      alignment: isCustomer ? Alignment.centerLeft : Alignment.centerRight,
       child: Semantics(
         container: true,
-        label: message.text,
+        label: text,
         child: ConstrainedBox(
           constraints: BoxConstraints(
-            maxWidth: MediaQuery.sizeOf(context).width * 0.8,
+            maxWidth: MediaQuery.sizeOf(context).width * 0.82,
           ),
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: background,
-              borderRadius: BorderRadius.all(Radius.circular(AppRadius.bubble)),
+              color: solid,
+              gradient: gradient,
+              borderRadius: radius,
               border: isCustomer
                   ? Border.all(color: scheme.outlineVariant, width: 1)
                   : null,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
             child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.sm),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: AppSpacing.sm + 2,
+              ),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Directionality(
                     textDirection: direction,
                     child: SelectableText(
-                      message.text,
+                      text,
                       textAlign: TextAlign.start,
                       style: theme.textTheme.bodyLarge?.copyWith(
                         color: foreground,
-                        height: 1.6,
+                        height: 1.5,
                       ),
                       showCursor: false,
                     ),
                   ),
-                  if (isBot)
+                  if (lastOfGroup && (isBot || time != null))
                     Padding(
                       padding: const EdgeInsets.only(top: AppSpacing.xs),
-                      child: Text(
-                        Strings.bot,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: foreground,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  if (time != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: AppSpacing.xs),
-                      child: Text(
-                        time,
-                        textDirection: TextDirection.ltr,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: foreground,
-                          fontSize: 11,
-                        ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (isBot) ...[
+                            Icon(
+                              Icons.smart_toy_outlined,
+                              size: 13,
+                              color: foreground.withValues(alpha: 0.8),
+                            ),
+                            const SizedBox(width: AppSpacing.xs),
+                            Flexible(
+                              child: Text(
+                                Strings.bot,
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: foreground.withValues(alpha: 0.8),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            if (time != null)
+                              const SizedBox(width: AppSpacing.sm),
+                          ],
+                          if (time != null)
+                            Text(
+                              time,
+                              textDirection: TextDirection.ltr,
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: foreground.withValues(alpha: 0.75),
+                                fontSize: 11,
+                              ),
+                            ),
+                          if (isCm) ...[
+                            const SizedBox(width: AppSpacing.xs),
+                            Icon(
+                              Icons.done_all_rounded,
+                              size: 14,
+                              color: foreground.withValues(alpha: 0.85),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                 ],

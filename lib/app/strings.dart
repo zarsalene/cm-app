@@ -30,6 +30,13 @@ abstract class Strings {
   static const newAlert = 'Nouvelle alerte client';
   static const notificationsOff = 'Notifications désactivées';
   static const appName = 'Z-Smart-CM';
+  static const version = 'Version';
+  static const pushActive = 'Alertes actives';
+  static const pushUnavailable =
+      'Alertes indisponibles (version sans Firebase)';
+  static const pushOff = 'Alertes désactivées dans les réglages du téléphone';
+  static const backToMenu = 'Retour au menu';
+  static const back = 'Retour';
   static const liveLabel = 'En direct';
   static const refresh = 'Actualiser';
   static const pauseLive = 'Mettre le direct en pause';

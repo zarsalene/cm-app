@@ -1,9 +1,11 @@
 import 'package:cm_app/app/strings.dart';
 import 'package:cm_app/app/theme.dart';
 import 'package:cm_app/auth/auth_bloc.dart';
+import 'package:cm_app/push/push_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 /// Navigation drawer (menu): profile header + destinations + logout.
 class AppDrawer extends StatelessWidget {
@@ -107,6 +109,7 @@ class AppDrawer extends StatelessWidget {
             iconColor: scheme.error,
             onTap: () => _logout(context),
           ),
+          const _AppStatus(),
           const SizedBox(height: AppSpacing.pageGutter),
         ],
       ),
@@ -234,6 +237,42 @@ class _DrawerItem extends StatelessWidget {
         borderRadius: BorderRadius.all(Radius.circular(AppRadius.card)),
       ),
       tileColor: tc == scheme.error ? null : null,
+    );
+  }
+}
+
+/// App version and whether this build can receive alerts at all.
+class _AppStatus extends StatelessWidget {
+  const _AppStatus();
+
+  Future<String> _text(BuildContext context) async {
+    final push = context.read<PushService>();
+    final info = await PackageInfo.fromPlatform();
+    final alerts = !push.available
+        ? Strings.pushUnavailable
+        : await push.notificationsEnabled
+        ? Strings.pushActive
+        : Strings.pushOff;
+    return '${Strings.version} ${info.version} (${info.buildNumber})\n$alerts';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.pageGutter,
+        vertical: AppSpacing.sm,
+      ),
+      child: FutureBuilder<String>(
+        future: _text(context),
+        builder: (context, snapshot) => Text(
+          snapshot.data ?? '',
+          textAlign: TextAlign.center,
+          style: context.theme.textTheme.bodySmall?.copyWith(
+            color: context.scheme.onSurfaceVariant,
+          ),
+        ),
+      ),
     );
   }
 }

@@ -38,6 +38,9 @@ abstract class PushService {
 
   /// False when the user refused (or turned off) notifications.
   Future<bool> get notificationsEnabled;
+
+  /// False in a build without Firebase: no alert can ever arrive.
+  bool get available;
 }
 
 /// Does nothing. Used when Firebase is not available (local build).
@@ -59,6 +62,9 @@ class NoopPushService implements PushService {
 
   @override
   Future<bool> get notificationsEnabled async => true;
+
+  @override
+  bool get available => false;
 }
 
 /// Firebase Cloud Messaging on the `cm_bosphore` topic.
@@ -101,6 +107,9 @@ class FcmPushService implements PushService {
 
   @override
   Stream<void> get foreground => FirebaseMessaging.onMessage.map((_) {});
+
+  @override
+  bool get available => true;
 
   @override
   Future<bool> get notificationsEnabled async {

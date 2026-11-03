@@ -93,6 +93,14 @@ void main() {
       await tester.settle();
       expect(find.text('Sana Ben Ali'), findsOneWidget);
       expect(find.text('FB'), findsOneWidget);
+      expect(find.byTooltip('Se déconnecter'), findsNothing);
+
+      // Back to the menu and forward again.
+      await tester.tap(find.byTooltip('Retour au menu'));
+      await tester.settle();
+      expect(find.text('Voir les 1 ouverte'), findsOneWidget);
+      await tester.tap(find.text('Voir les 1 ouverte'));
+      await tester.settle();
 
       // List -> chat.
       await tester.tap(find.text('Sana Ben Ali'));

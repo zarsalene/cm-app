@@ -5,7 +5,6 @@ import 'package:cm_app/app/channel_chip.dart';
 import 'package:cm_app/app/motion_widgets.dart';
 import 'package:cm_app/app/strings.dart';
 import 'package:cm_app/app/theme.dart';
-import 'package:cm_app/auth/auth_bloc.dart';
 import 'package:cm_app/escalations/escalations_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -81,6 +80,11 @@ class _EscalationsPageState extends State<EscalationsPage>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          tooltip: Strings.backToMenu,
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.go('/'),
+        ),
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -105,12 +109,6 @@ class _EscalationsPageState extends State<EscalationsPage>
               progress: _liveIcon,
             ),
             onPressed: _toggleLive,
-          ),
-          IconButton(
-            tooltip: Strings.logout,
-            icon: const Icon(Icons.logout),
-            onPressed: () =>
-                context.read<AuthBloc>().add(const LogoutRequested()),
           ),
         ],
       ),
@@ -463,7 +461,7 @@ class _RowState extends State<_Row> with SingleTickerProviderStateMixin {
                           const SizedBox(height: AppSpacing.xs),
                           Text(
                             item.reason,
-                            maxLines: 1,
+                            maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: context.theme.textTheme.bodyMedium?.copyWith(
                               color: context.scheme.onSurfaceVariant,

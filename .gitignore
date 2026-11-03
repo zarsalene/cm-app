@@ -117,3 +117,5 @@ lib/l10n/gen/
 *.jks
 key.properties
 google-services.json
+
+n8n/backups/
