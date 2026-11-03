@@ -73,10 +73,19 @@ class ChatCubit extends Cubit<ChatState> {
   }
 
   /// Silent load: no error shown, draft and error kept. Skipped while a
-  /// send or give-back runs, or before the first load succeeded.
+  /// send or give-back runs. Before the first load succeeded it retries
+  /// that load instead; its error stays on screen until the retry ends.
   Future<void> refresh() async {
-    if (isClosed || _refreshing || state.sending || state.chat == null) return;
+    if (isClosed || _refreshing || state.sending) return;
     _refreshing = true;
+    if (state.chat == null) {
+      try {
+        await load(keepError: true);
+      } finally {
+        _refreshing = false;
+      }
+      return;
+    }
     final seq = _seq;
     try {
       final chat = await _api.chat(_senderId, _platform);
@@ -92,9 +101,9 @@ class ChatCubit extends Cubit<ChatState> {
     }
   }
 
-  Future<void> load() async {
+  Future<void> load({bool keepError = false}) async {
     _seq++;
-    emit(state.copyWith());
+    if (!keepError) emit(state.copyWith());
     try {
       final chat = await _api.chat(_senderId, _platform);
       if (!isClosed) emit(state.copyWith(chat: chat));
