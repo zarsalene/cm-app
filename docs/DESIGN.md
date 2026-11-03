@@ -80,3 +80,12 @@ Chat
 +------------------------------+
 ```
 Customer bubbles left. Bot and CM bubbles right.
+
+## Brand
+
+- Name: `Z-Smart-CM` (production), `Z-Smart-CM [STG]`, `Z-Smart-CM [DEV]`. Set in `android/app/build.gradle.kts` (`appName` placeholder) and `Strings.appName`.
+- Logo files in `assets/logo/`: `icon_1024.png` (icon, launcher source), `wordmark.png` (splash), `microzed.jpeg` (credit logo, 200 px: never show above 72 dp). Originals stay untouched.
+- Launcher icon: `dart run flutter_launcher_icons` (config in `pubspec.yaml`). One icon for all flavors, white adaptive background.
+- Credit rule: "Développé par" + Microzed logo, semantics label "Développé par Microzed". Splash: 56 dp. Login footer: 28 dp.
+- Splash: white page in light and dark mode. Icon scales 0.8 to 1.0 with fade (600 ms), then wordmark fades in. Shown at least 1.0 s after the first frame, then the router leaves as soon as auth is known (`SplashGate` in `lib/app/router.dart`).
+- No hold at all when auth is known at first frame, when a push tap is pending, or when `disableAnimations` is on (static logos).
