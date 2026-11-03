@@ -7,6 +7,7 @@ analyzer:
     - lib/**/*.g.dart
     - build/**
     - android/**
+    - web/**
 linter:
   rules:
     public_member_api_docs: false
