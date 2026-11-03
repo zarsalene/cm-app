@@ -1,12 +1,12 @@
 import 'package:cm_app/api/cm_api.dart';
+import 'package:cm_app/app/router.dart';
 import 'package:cm_app/app/theme.dart';
 import 'package:cm_app/auth/auth_bloc.dart';
-import 'package:cm_app/auth/login_page.dart';
 import 'package:cm_app/auth/token_store.dart';
-import 'package:cm_app/counter/counter.dart';
 import 'package:cm_app/l10n/l10n.dart';
 import 'package:cm_app/push/push_service.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:material_ui/material_ui.dart';
 
@@ -41,25 +41,46 @@ class App extends StatelessWidget {
           context.read<TokenStore>(),
           context.read<PushService>(),
         )..add(const AuthStarted()),
-        child: MaterialApp(
-          theme: AppTheme.light,
-          darkTheme: AppTheme.dark,
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          // Placeholder: Task 8 replaces this with the router.
-          home: BlocBuilder<AuthBloc, AuthState>(
-            builder: (context, state) => switch (state) {
-              AuthUnknown() => const Scaffold(
-                body: Center(child: CircularProgressIndicator()),
-              ),
-              Authenticated() => const CounterPage(),
-              Unauthenticated() ||
-              LoginInProgress() ||
-              LoginFailure() => const LoginPage(),
-            },
-          ),
-        ),
+        child: const _AppView(),
       ),
+    );
+  }
+}
+
+class _AppView extends StatefulWidget {
+  const new();
+
+  @override
+  State<_AppView> createState() => _AppViewState();
+}
+
+class _AppViewState extends State<_AppView> {
+  late final AuthRefresh _refresh;
+  late final GoRouter _router;
+
+  @override
+  void initState() {
+    super.initState();
+    final auth = context.read<AuthBloc>();
+    _refresh = AuthRefresh(auth);
+    _router = createRouter(auth, context.read<CmApi>(), _refresh);
+  }
+
+  @override
+  void dispose() {
+    _router.dispose();
+    _refresh.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp.router(
+      theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      routerConfig: _router,
     );
   }
 }
