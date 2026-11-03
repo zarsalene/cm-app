@@ -1,8 +1,8 @@
-# Convert logos to base64 data URIs and rebuild vitrine workflow
+# Convert logos to base64 data URIs and rebuild vitrine workflow (with downscaled icon)
 $ErrorActionPreference = 'Stop'
 $dir = Split-Path -Parent $MyInvocation.MyCommand.Path
+Add-Type -AssemblyName System.Drawing
 
-# Convert images to base64 data URIs
 function ConvertTo-DataUri($path) {
     $bytes = [System.IO.File]::ReadAllBytes($path)
     $b64 = [Convert]::ToBase64String($bytes)
@@ -11,7 +11,44 @@ function ConvertTo-DataUri($path) {
     "data:$mime;base64,$b64"
 }
 
-$appIcon = ConvertTo-DataUri "$dir\..\assets\logo\icon_1024.png"
+function ResizeAndDataUri($srcPath, $maxDim) {
+    $img = [System.Drawing.Image]::FromFile($srcPath)
+    $w = $img.Width
+    $h = $img.Height
+    if ($w -gt $maxDim -or $h -gt $maxDim) {
+        if ($w -gt $h) {
+            $newW = $maxDim
+            $newH = [int]($h * $maxDim / $w)
+        } else {
+            $newH = $maxDim
+            $newW = [int]($w * $maxDim / $h)
+        }
+        $bmp = New-Object System.Drawing.Bitmap($newW, $newH)
+        $g = [System.Drawing.Graphics]::FromImage($bmp)
+        $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+        $g.DrawImage($img, 0, 0, $newW, $newH)
+        $g.Dispose()
+        $img.Dispose()
+        $img = $bmp
+    }
+    $ms = New-Object System.IO.MemoryStream
+    $ext = [System.IO.Path]::GetExtension($srcPath).ToLower()
+    if ($ext -eq '.png') {
+        $img.Save($ms, ([System.Drawing.Imaging.ImageFormat]::Png))
+    } else {
+        $img.Save($ms, ([System.Drawing.Imaging.ImageFormat]::Jpeg))
+    }
+    $bytes = $ms.ToArray()
+    $img.Dispose()
+    $ms.Dispose()
+    $b64 = [Convert]::ToBase64String($bytes)
+    $mime = if ($ext -eq '.png') { 'image/png' } else { 'image/jpeg' }
+    "data:$mime;base64,$b64"
+}
+
+# App icon: downscale to 128px max (used at 34x34 nav, 84x84 hero, favicon)
+$appIcon = ResizeAndDataUri "$dir\..\assets\logo\icon_1024.png" 128
+# Microzed logo: already small (200x200, 4.6KB), keep as-is
 $microzedLogo = ConvertTo-DataUri "$dir\..\assets\logo\microzed.jpeg"
 
 Write-Host "App icon data URI length: $($appIcon.Length)"
@@ -23,31 +60,19 @@ $js = Get-Content -Raw -Path $jsPath -Encoding UTF8
 
 # Replace placeholders with real data URIs
 $js2 = $js -replace '__APP_ICON__', $appIcon
-$js2 = $js2 -replace '__MICROZED_LOGO__', $microzedLogo
 
-# Add hero logo image after the brand section — replace the "avatar" Z text with real logo
-# Find the hero visual section and add logo
+$nl = [environment]::NewLine
 $heroLogoImg = '<img class="hero-logo" src="' + $appIcon + '" alt="Z-Smart-CM logo">'
-
-# Insert hero logo right after <div class="hero-visual"> opening
-if ($js2 -match '<div class="hero-visual">') {
-    $nl = [environment]::NewLine
 $js2 = $js2 -replace '<div class="hero-visual">', ('<div class="hero-visual">' + $nl + $heroLogoImg)
-    Write-Host "Hero logo inserted"
-} else {
-    Write-Host "WARNING: hero-visual not found"
-}
 
-# Replace the microzed.jpeg relative path in footer with data URI
 $microzedImgTag = 'src="' + $microzedLogo + '"'
 $js2 = $js2 -replace 'src="assets/logo/microzed.jpeg"', $microzedImgTag
-Write-Host "Footer microzed logo replaced"
 
 # Write updated vitrine.js
 [System.IO.File]::WriteAllText($jsPath, $js2, (New-Object System.Text.UTF8Encoding($false)))
 Write-Host "vitrine.js updated"
 
-# Now regenerate the workflow JSON
+# Regenerate workflow JSON
 $template = @'
 {
   "name": "Z-Smart-CM - Page vitrine",
@@ -141,7 +166,6 @@ $template = @'
 }
 '@
 
-# Escape the JS for JSON: backslash, quote, CR, LF, TAB
 $esc = $js2.Replace('\', '\\').Replace('"', '\"')
 $esc = $esc.Replace([string][char]13, '').Replace([string][char]10, '\n').Replace([string][char]9, '\t')
 
