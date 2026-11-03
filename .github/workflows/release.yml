@@ -1,0 +1,55 @@
+name: Build & Release APK
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: "3.47.0"
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build production APK
+        run: flutter build apk --release --flavor production -t lib/main_production.dart
+
+      - name: Stage APK
+        run: cp build/app/outputs/flutter-apk/app-production-release.apk Z-Smart-CM.apk
+
+      # Tag push (v0.2.0, ...) -> GitHub Release avec l'APK en piece jointe.
+      # Remarque : sans google-services.json dans le repo, l'APK CI tourne sans push FCM
+      # (Firebase init echoue -> NoopPushService, le reste de l'app marche normalement).
+      - name: Release with APK
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: Z-Smart-CM.apk
+          prerelease: true
+          generate_release_notes: true
+
+      # Lancement manuel (workflow_dispatch) -> artefact telechargeable sur la page de l'Action.
+      - name: Upload artifact
+        if: "!startsWith(github.ref, 'refs/tags/v')"
+        uses: actions/upload-artifact@v4
+        with:
+          name: Z-Smart-CM-apk
+          path: Z-Smart-CM.apk
