@@ -218,7 +218,13 @@ class _ConversationState extends State<_Conversation> {
             ),
           ),
         if (chat.mode == ChatMode.human)
-          _Composer(controller: _reply)
+          BlocListener<ChatCubit, ChatState>(
+            // A send succeeded: the cubit cleared the draft, so clear the field.
+            listenWhen: (previous, current) =>
+                previous.draft.isNotEmpty && current.draft.isEmpty,
+            listener: (_, __) => _reply.clear(),
+            child: _Composer(controller: _reply),
+          )
         else if (chat.mode == ChatMode.bot)
           Padding(
             padding: const EdgeInsets.all(AppSpacing.pageGutter),
