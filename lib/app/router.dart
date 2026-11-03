@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cm_app/api/cm_api.dart';
+import 'package:cm_app/app/splash_page.dart';
 import 'package:cm_app/auth/auth_bloc.dart';
 import 'package:cm_app/auth/login_page.dart';
 import 'package:cm_app/chat/chat_cubit.dart';
@@ -27,12 +28,50 @@ class AuthRefresh extends ChangeNotifier {
   }
 }
 
+/// Holds the splash for a minimum time. Never holds an alert: [release]
+/// ends the hold at once (push tap, reduced motion).
+class SplashGate extends ChangeNotifier {
+  new({required bool hold, Duration minimum = const Duration(seconds: 1)})
+    : _done = !hold {
+    if (hold) {
+      // Counted from the first frame.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!_done) _timer = Timer(minimum, release);
+      });
+    }
+  }
+
+  bool _done;
+  Timer? _timer;
+
+  bool get done => _done;
+
+  void release() {
+    _timer?.cancel();
+    if (_done) return;
+    _done = true;
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+}
+
 /// Where [state] allows the user to be, or null to stay at [location].
-String? authRedirect(AuthState state, String location) {
+/// Leaving `/splash` also needs [splashDone].
+String? authRedirect(
+  AuthState state,
+  String location, {
+  bool splashDone = true,
+}) {
+  final onSplash = location == '/splash';
   return switch (state) {
-    AuthUnknown() => location == '/splash' ? null : '/splash',
-    Authenticated() =>
-      location == '/login' || location == '/splash' ? '/' : null,
+    AuthUnknown() => onSplash ? null : '/splash',
+    _ when onSplash && !splashDone => null,
+    Authenticated() => location == '/login' || onSplash ? '/' : null,
     Unauthenticated() ||
     LoginInProgress() ||
     LoginFailure() => location == '/login' ? null : '/login',
@@ -44,18 +83,16 @@ GoRouter createRouter(
   CmApi api,
   PushService push,
   Listenable refresh,
+  SplashGate splash,
 ) {
   void onUnauthorized() => auth.add(const SessionExpired());
   return GoRouter(
     initialLocation: '/',
     refreshListenable: refresh,
-    redirect: (context, state) => authRedirect(auth.state, state.uri.path),
+    redirect: (context, state) =>
+        authRedirect(auth.state, state.uri.path, splashDone: splash.done),
     routes: [
-      GoRoute(
-        path: '/splash',
-        builder: (context, state) =>
-            const Scaffold(body: Center(child: CircularProgressIndicator())),
-      ),
+      GoRoute(path: '/splash', builder: (context, state) => const SplashPage()),
       GoRoute(path: '/login', builder: (context, state) => const LoginPage()),
       GoRoute(
         path: '/',

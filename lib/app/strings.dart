@@ -29,6 +29,9 @@ abstract class Strings {
   static const justNow = "à l'instant";
   static const newAlert = 'Nouvelle alerte client';
   static const notificationsOff = 'Notifications désactivées';
+  static const appName = 'Z-Smart-CM';
+  static const developedBy = 'Développé par';
+  static const developedByMicrozed = 'Développé par Microzed';
   static const connectionLost = 'Connexion perdue, nouvelle tentative…';
 
   /// Error text for a failed call.

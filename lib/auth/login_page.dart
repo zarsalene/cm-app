@@ -1,3 +1,4 @@
+import 'package:cm_app/app/credit_line.dart';
 import 'package:cm_app/app/theme.dart';
 import 'package:cm_app/auth/auth_bloc.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -103,6 +104,8 @@ class _LoginPageState extends State<LoginPage> {
                           )
                         : const Text('Se connecter'),
                   ),
+                  const SizedBox(height: AppSpacing.lg),
+                  const CreditLine(logoHeight: 28),
                 ],
               ),
             ),

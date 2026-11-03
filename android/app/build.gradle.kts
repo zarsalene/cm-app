@@ -61,17 +61,17 @@ android {
         create("production") {
             dimension = "default"
             applicationIdSuffix = ""
-            manifestPlaceholders["appName"] = "Cm App"
+            manifestPlaceholders["appName"] = "Z-Smart-CM"
         }
         create("staging") {
             dimension = "default"
             applicationIdSuffix = ".stg"
-            manifestPlaceholders["appName"] = "[STG] Cm App"
+            manifestPlaceholders["appName"] = "Z-Smart-CM [STG]"
         }
         create("development") {
             dimension = "default"
             applicationIdSuffix = ".dev"
-            manifestPlaceholders["appName"] = "[DEV] Cm App"
+            manifestPlaceholders["appName"] = "Z-Smart-CM [DEV]"
         }
     }
 

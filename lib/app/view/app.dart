@@ -63,6 +63,7 @@ class _AppViewState extends State<_AppView> {
 
   final _messenger = GlobalKey<ScaffoldMessengerState>();
   late final AuthRefresh _refresh;
+  late final SplashGate _splash;
   late final GoRouter _router;
   late final StreamSubscription<PushTarget> _opened;
   late final StreamSubscription<void> _foreground;
@@ -78,13 +79,27 @@ class _AppViewState extends State<_AppView> {
     final auth = context.read<AuthBloc>();
     final push = context.read<PushService>();
     _refresh = AuthRefresh(auth);
-    _router = createRouter(auth, context.read<CmApi>(), push, _refresh);
+    // No hold when auth is known at first frame or motion is reduced.
+    final reduceMotion = WidgetsBinding
+        .instance
+        .platformDispatcher
+        .accessibilityFeatures
+        .disableAnimations;
+    _splash = SplashGate(hold: auth.state is AuthUnknown && !reduceMotion);
+    _router = createRouter(
+      auth,
+      context.read<CmApi>(),
+      push,
+      Listenable.merge([_refresh, _splash]),
+      _splash,
+    );
     _opened = push.opened.listen((target) {
       if (auth.state is Authenticated) {
         _openChat(target);
       } else {
         _pending = target;
         _pendingAt = DateTime.now();
+        _splash.release();
       }
     });
     _foreground = push.foreground.listen((_) {
@@ -140,12 +155,14 @@ class _AppViewState extends State<_AppView> {
     unawaited(_auth.cancel());
     _router.dispose();
     _refresh.dispose();
+    _splash.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
+      title: Strings.appName,
       scaffoldMessengerKey: _messenger,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
