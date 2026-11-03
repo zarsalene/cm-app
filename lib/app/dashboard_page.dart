@@ -2,6 +2,7 @@ import 'package:cm_app/app/app_drawer.dart';
 import 'package:cm_app/app/channel_chip.dart';
 import 'package:cm_app/app/strings.dart';
 import 'package:cm_app/app/theme.dart';
+import 'package:cm_app/api/models.dart';
 import 'package:cm_app/escalations/escalations_cubit.dart';
 import 'package:cm_app/escalations/escalations_page.dart';
 import 'package:flutter/material.dart';
