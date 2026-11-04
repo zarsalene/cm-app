@@ -65,17 +65,64 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   }
 }
 
-class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
+class ChatAppBar extends StatefulWidget implements PreferredSizeWidget {
   const ChatAppBar({required this.chat, super.key});
 
   final Chat? chat;
 
   @override
+  State<ChatAppBar> createState() => _ChatAppBarState();
+
+  @override
   Size get preferredSize => const Size.fromHeight(kToolbarHeight);
+}
+
+class _ChatAppBarState extends State<ChatAppBar> {
+  String? _cachedName;
+
+  @override
+  void initState() {
+    super.initState();
+    _maybeCacheName();
+    _loadCachedName();
+  }
+
+  @override
+  void didUpdateWidget(ChatAppBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _maybeCacheName();
+    if (widget.chat?.customerName == null ||
+        widget.chat!.customerName!.trim().isEmpty) {
+      _loadCachedName();
+    }
+  }
+
+  void _maybeCacheName() {
+    if (widget.chat?.customerName?.trim()?.isNotEmpty == true) {
+      unawaited(
+        context.read<TokenStore>().cacheCustomerName(
+          widget.chat!.senderId,
+          widget.chat!.customerName!,
+        ),
+      );
+    }
+  }
+
+  Future<void> _loadCachedName() async {
+    if (widget.chat?.senderId == null) return;
+    final name = await context.read<TokenStore>().readCustomerName(
+      widget.chat!.senderId,
+    );
+    if (mounted) setState(() => _cachedName = name);
+  }
 
   @override
   Widget build(BuildContext context) {
     final sending = context.select<ChatCubit, bool>((c) => c.state.sending);
+    final chat = widget.chat;
+    final resolvedName = chat?.customerName?.trim()?.isNotEmpty == true
+        ? chat!.customerName!
+        : _cachedName;
     return AppBar(
       // Opened from a push alert there is nothing to pop: go to the list.
       leading: IconButton(
@@ -88,13 +135,13 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
         chat == null
             ? Strings.chatTitle
             : Strings.customerLabel(
-                chat!.customerName,
+                resolvedName,
                 chat!.senderId,
                 platform: chat!.platform,
               ),
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
-        textDirection: _nameDirection(chat?.customerName),
+        textDirection: _nameDirection(resolvedName ?? chat?.customerName),
         textAlign: TextAlign.center,
       ),
       centerTitle: true,

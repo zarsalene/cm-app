@@ -151,10 +151,7 @@ GoRouter createRouter(
         path: '/profile',
         builder: (context, state) => const ProfilePage(),
       ),
-      GoRoute(
-        path: '/help',
-        builder: (context, state) => const HelpPage(),
-      ),
+      GoRoute(path: '/help', builder: (context, state) => const HelpPage()),
     ],
   );
 }

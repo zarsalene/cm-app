@@ -13,6 +13,7 @@ class TokenStore {
   static const _tokenKey = 'cm_token';
   static const _usernameKey = 'cm_username';
   static const _rememberMeKey = 'cm_remember_me';
+  static const _nameCacheKey = 'cm_name_cache_';
 
   final FlutterSecureStorage _storage;
 
@@ -94,6 +95,29 @@ class TokenStore {
       if (kDebugMode) log('TokenStore.delete: session cleared');
     } on Object {
       if (kDebugMode) log('TokenStore.delete: failed');
+    }
+  }
+
+  /// Caches a customer name for [senderId] so it can be reused when the API
+  /// doesn't send a name. Called whenever the API returns a known name.
+  Future<void> cacheCustomerName(String senderId, String name) async {
+    try {
+      await _storage.write(key: '${_nameCacheKey}$senderId', value: name);
+      if (kDebugMode) log('TokenStore.cacheCustomerName: $senderId -> $name');
+    } on Object {
+      if (kDebugMode) log('TokenStore.cacheCustomerName: failed');
+    }
+  }
+
+  /// Reads a previously cached customer name for [senderId], or null.
+  Future<String?> readCustomerName(String senderId) async {
+    try {
+      final value = await _storage.read(key: '${_nameCacheKey}$senderId');
+      if (kDebugMode) log('TokenStore.readCustomerName: $senderId -> $value');
+      return value;
+    } on Object {
+      if (kDebugMode) log('TokenStore.readCustomerName: failed');
+      return null;
     }
   }
 }

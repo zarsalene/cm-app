@@ -31,7 +31,7 @@ class AppBlocObserver extends BlocObserver {
 
 Future<void> bootstrap(
   FutureOr<Widget> Function(PushService push, ThemeModeService themeMode)
-      builder,
+  builder,
 ) async {
   FlutterError.onError = (details) {
     log(details.exceptionAsString(), stackTrace: details.stack);

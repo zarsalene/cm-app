@@ -53,7 +53,9 @@ class ApiCache {
     final now = DateTime.now();
     for (final entry in _store.entries) {
       if (now.isAfter(entry.value.expiry)) continue;
-      log('cache[${entry.key}] ttl=${entry.value.expiry.difference(now).inSeconds}s');
+      log(
+        'cache[${entry.key}] ttl=${entry.value.expiry.difference(now).inSeconds}s',
+      );
     }
   }
 }

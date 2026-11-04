@@ -136,10 +136,17 @@ abstract class Strings {
 
   /// Customer name, or `Client <channel> …<last 4 of senderId>` when unknown.
   /// [platform] is `facebook` or `whatsapp` — used for a better fallback label.
-  static String customerLabel(String? name, String senderId,
-      {String? platform}) {
+  /// [cachedName] is a previously cached name for [senderId] — used when the
+  /// API doesn't send a name but we remember it from a earlier conversation.
+  static String customerLabel(
+    String? name,
+    String senderId, {
+    String? platform,
+    String? cachedName,
+  }) {
     final trimmed = name?.trim() ?? '';
     if (trimmed.isNotEmpty) return trimmed;
+    if (cachedName?.trim()?.isNotEmpty == true) return cachedName!.trim();
     final channel = switch (platform) {
       'facebook' => Strings.facebook,
       'whatsapp' => Strings.whatsapp,

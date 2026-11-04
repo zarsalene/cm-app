@@ -5,16 +5,14 @@ import 'package:cm_app/app/channel_chip.dart';
 import 'package:cm_app/app/motion_widgets.dart';
 import 'package:cm_app/app/strings.dart';
 import 'package:cm_app/app/theme.dart';
+import 'package:cm_app/auth/token_store.dart';
 import 'package:cm_app/escalations/escalations_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 /// Sort order for the escalation list.
-enum _SortOrder {
-  newestFirst,
-  oldestFirst,
-}
+enum _SortOrder { newestFirst, oldestFirst }
 
 class EscalationsPage extends StatefulWidget {
   const EscalationsPage({super.key});
@@ -143,11 +141,7 @@ class _EscalationsPageState extends State<EscalationsPage>
               onSort: (s) => setState(() => _sort = s),
             ),
             Expanded(
-              child: _List(
-                query: _query,
-                channel: _channel,
-                sortOrder: _sort,
-              ),
+              child: _List(query: _query, channel: _channel, sortOrder: _sort),
             ),
           ],
         ),
@@ -390,6 +384,7 @@ class _Row extends StatefulWidget {
 
 class _RowState extends State<_Row> with SingleTickerProviderStateMixin {
   bool _pushing = false;
+  String? _cachedName;
   late final AnimationController _enterController;
   late final Animation<double> _opacity;
   late final Animation<Offset> _slide;
@@ -407,12 +402,42 @@ class _RowState extends State<_Row> with SingleTickerProviderStateMixin {
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _enterController, curve: Curves.easeOut));
     _enterController.forward();
+    _maybeCacheName();
+    _loadCachedName();
+  }
+
+  @override
+  void didUpdateWidget(_Row oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _maybeCacheName();
+    if (widget.item.customerName == null ||
+        widget.item.customerName!.trim().isEmpty) {
+      _loadCachedName();
+    }
   }
 
   @override
   void dispose() {
     _enterController.dispose();
     super.dispose();
+  }
+
+  void _maybeCacheName() {
+    if (widget.item.customerName?.trim()?.isNotEmpty == true) {
+      unawaited(
+        context.read<TokenStore>().cacheCustomerName(
+          widget.item.senderId,
+          widget.item.customerName!,
+        ),
+      );
+    }
+  }
+
+  Future<void> _loadCachedName() async {
+    final name = await context.read<TokenStore>().readCustomerName(
+      widget.item.senderId,
+    );
+    if (mounted) setState(() => _cachedName = name);
   }
 
   @override
@@ -422,8 +447,11 @@ class _RowState extends State<_Row> with SingleTickerProviderStateMixin {
     final channel = item.platform == 'whatsapp'
         ? Strings.whatsapp
         : Strings.facebook;
+    final resolvedName = item.customerName?.trim()?.isNotEmpty == true
+        ? item.customerName!
+        : _cachedName;
     final name = Strings.customerLabel(
-      item.customerName,
+      resolvedName,
       item.senderId,
       platform: item.platform,
     );

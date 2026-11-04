@@ -25,14 +25,12 @@ class HelpPage extends StatelessWidget {
           Text(
             Strings.faqTitle,
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: scheme.onSurface,
-                ),
+              fontWeight: FontWeight.w700,
+              color: scheme.onSurface,
+            ),
           ),
           const SizedBox(height: AppSpacing.md),
-          ..._faqs.map(
-            (faq) => _FaqItem(question: faq.$1, answer: faq.$2),
-          ),
+          ..._faqs.map((faq) => _FaqItem(question: faq.$1, answer: faq.$2)),
           const SizedBox(height: AppSpacing.xl),
           _ContactCard(),
         ],
@@ -53,10 +51,8 @@ class _FaqItem extends StatelessWidget {
     return ExpansionTile(
       title: Text(
         question,
-        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              fontWeight: FontWeight.w600,
-              color: scheme.onSurface,
-            ),
+        style: Theme.of(context).textTheme.bodyLarge
+            ?.copyWith(fontWeight: FontWeight.w600, color: scheme.onSurface),
       ),
       children: [
         Padding(
@@ -68,10 +64,8 @@ class _FaqItem extends StatelessWidget {
           ),
           child: Text(
             answer,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                  height: 1.5,
-                ),
+            style: Theme.of(context).textTheme.bodyMedium
+                ?.copyWith(color: scheme.onSurfaceVariant, height: 1.5),
           ),
         ),
       ],
@@ -99,17 +93,16 @@ class _ContactCard extends StatelessWidget {
             Strings.contactTitle,
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: scheme.onPrimaryContainer,
-                ),
+              fontWeight: FontWeight.w700,
+              color: scheme.onPrimaryContainer,
+            ),
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
             Strings.contactBody,
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: scheme.onPrimaryContainer,
-                ),
+            style: Theme.of(context).textTheme.bodyMedium
+                ?.copyWith(color: scheme.onPrimaryContainer),
           ),
           const SizedBox(height: AppSpacing.vertical16),
           FilledButton.icon(
@@ -126,22 +119,22 @@ class _ContactCard extends StatelessWidget {
 final List<(String, String)> _faqs = [
   (
     'Comment r\u00e9pondre \u00e0 un client ?',
-    "Ouvrez la conversation depuis la liste des escalades, \u00e9crivez votre r\u00e9ponse et appuyez sur Envoyer."
+    "Ouvrez la conversation depuis la liste des escalades, \u00e9crivez votre r\u00e9ponse et appuyez sur Envoyer.",
   ),
   (
     'Que signifie "Rendre au bot" ?',
-    'Cela remet la conversation au bot automatique. Le client ne sera plus pris en charge par un humain.'
+    'Cela remet la conversation au bot automatique. Le client ne sera plus pris en charge par un humain.',
   ),
   (
     'Pourquoi je ne re\u00e7ois pas d\u2019alertes ?',
-    'V\u00e9rifiez que les notifications sont activ\u00e9es dans Param\u00e8tres et dans les r\u00e9glages de votre t\u00e9l\u00e9phone.'
+    'V\u00e9rifiez que les notifications sont activ\u00e9es dans Param\u00e8tres et dans les r\u00e9glages de votre t\u00e9l\u00e9phone.',
   ),
   (
     'Une escalade dispara\u00eet de la liste',
-    'Une escalade passe en "Ferm\u00e9e" quand vous rendez la conversation au bot ou qu\u2019elle est r\u00e9solue.'
+    'Une escalade passe en "Ferm\u00e9e" quand vous rendez la conversation au bot ou qu\u2019elle est r\u00e9solue.',
   ),
   (
     'Puis-je utiliser l\u2019application hors ligne ?',
-    'Vous pouvez consulter les derni\u00e8res donn\u00e9es charg\u00e9es, mais l\u2019envoi de r\u00e9ponses n\u00e9cessite une connexion.'
+    'Vous pouvez consulter les derni\u00e8res donn\u00e9es charg\u00e9es, mais l\u2019envoi de r\u00e9ponses n\u00e9cessite une connexion.',
   ),
 ];

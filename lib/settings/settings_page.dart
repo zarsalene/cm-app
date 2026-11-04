@@ -97,8 +97,8 @@ class _SettingsViewState extends State<_SettingsView> {
                 subtitle: Text(
                   state.pushAvailable
                       ? state.notificationsEnabled
-                          ? Strings.pushActive
-                          : Strings.pushOff
+                            ? Strings.pushActive
+                            : Strings.pushOff
                       : Strings.pushUnavailable,
                 ),
                 value: state.notificationsEnabled,
@@ -136,24 +136,24 @@ class _SettingsViewState extends State<_SettingsView> {
                 icon: _storageWorking == true
                     ? Icons.check_circle
                     : _storageWorking == false
-                        ? Icons.error
-                        : Icons.cloud_queue,
+                    ? Icons.error
+                    : Icons.cloud_queue,
                 label: 'Mémorisation des identifiants',
                 subtitle: _storageWorking == true
                     ? 'Le téléphone peut sauvegarder votre session'
                     : _storageWorking == false
-                        ? 'Le stockage sécurisé ne fonctionne pas'
-                        : 'Vérification en cours…',
+                    ? 'Le stockage sécurisé ne fonctionne pas'
+                    : 'Vérification en cours…',
                 textColor: _storageWorking == true
                     ? null
                     : _storageWorking == false
-                        ? scheme.error
-                        : scheme.onSurfaceVariant,
+                    ? scheme.error
+                    : scheme.onSurfaceVariant,
                 iconColor: _storageWorking == true
                     ? scheme.primary
                     : _storageWorking == false
-                        ? scheme.error
-                        : scheme.onSurfaceVariant,
+                    ? scheme.error
+                    : scheme.onSurfaceVariant,
                 onTap: _storageWorking == null ? _checkStorage : null,
               ),
 
@@ -168,10 +168,9 @@ class _SettingsViewState extends State<_SettingsView> {
                   return _Tile(
                     icon: Icons.info_outline,
                     label: Strings.appName,
-                    subtitle:
-                        info != null
-                            ? '${Strings.version} ${info.version} (${info.buildNumber})'
-                            : '',
+                    subtitle: info != null
+                        ? '${Strings.version} ${info.version} (${info.buildNumber})'
+                        : '',
                     onTap: null,
                   );
                 },
@@ -265,17 +264,16 @@ class _SettingsViewState extends State<_SettingsView> {
               Text(
                 Strings.logout,
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: scheme.onSurface,
-                    ),
+                  fontWeight: FontWeight.w700,
+                  color: scheme.onSurface,
+                ),
               ),
               const SizedBox(height: AppSpacing.vertical12),
               Text(
                 'Vous serez d\u00e9connect\u00e9(e) de votre compte.',
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
+                style: Theme.of(context).textTheme.bodyMedium
+                    ?.copyWith(color: scheme.onSurfaceVariant),
               ),
               const SizedBox(height: AppSpacing.vertical24),
               Row(
@@ -324,17 +322,16 @@ class _SettingsViewState extends State<_SettingsView> {
               Text(
                 'Réinitialiser la session',
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: scheme.onSurface,
-                    ),
+                  fontWeight: FontWeight.w700,
+                  color: scheme.onSurface,
+                ),
               ),
               const SizedBox(height: AppSpacing.vertical12),
               Text(
                 'Le token stocké sera effacé. Vous devrez vous reconnecter.',
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
+                style: Theme.of(context).textTheme.bodyMedium
+                    ?.copyWith(color: scheme.onSurfaceVariant),
               ),
               const SizedBox(height: AppSpacing.vertical24),
               Row(
@@ -383,9 +380,9 @@ class _Section extends StatelessWidget {
       child: Text(
         title,
         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: context.scheme.onSurfaceVariant,
-            ),
+          fontWeight: FontWeight.w700,
+          color: context.scheme.onSurfaceVariant,
+        ),
       ),
     );
   }
@@ -421,15 +418,14 @@ class _Tile extends StatelessWidget {
           fontWeight: FontWeight.w600,
         ),
       ),
-      subtitle:
-          subtitle.isNotEmpty
-              ? Text(
-                  subtitle,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
-                )
-              : null,
+      subtitle: subtitle.isNotEmpty
+          ? Text(
+              subtitle,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            )
+          : null,
       onTap: onTap,
       trailing: onTap != null ? const Icon(Icons.chevron_right) : null,
       contentPadding: const EdgeInsets.symmetric(

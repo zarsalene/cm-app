@@ -28,21 +28,24 @@ class SettingsState extends Equatable {
   final bool pushAvailable;
 
   @override
-  List<Object?> get props =>
-      [themeMode, notificationsEnabled, languageCode, pushAvailable];
+  List<Object?> get props => [
+    themeMode,
+    notificationsEnabled,
+    languageCode,
+    pushAvailable,
+  ];
 
   SettingsState copyWith({
     ThemeMode? themeMode,
     bool? notificationsEnabled,
     String? languageCode,
     bool? pushAvailable,
-  }) =>
-      SettingsState(
-        themeMode: themeMode ?? this.themeMode,
-        notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
-        languageCode: languageCode ?? this.languageCode,
-        pushAvailable: pushAvailable ?? this.pushAvailable,
-      );
+  }) => SettingsState(
+    themeMode: themeMode ?? this.themeMode,
+    notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
+    languageCode: languageCode ?? this.languageCode,
+    pushAvailable: pushAvailable ?? this.pushAvailable,
+  );
 }
 
 sealed class SettingsEvent extends Equatable {
@@ -74,11 +77,8 @@ final class const LanguageChanged({required this.code}) extends SettingsEvent {
 final class const CheckNotifications() extends SettingsEvent {}
 
 class SettingsCubit extends Cubit<SettingsState> {
-  SettingsCubit({
-    required this.theme,
-    required this.push,
-    required this.auth,
-  }) : super(SettingsState.initial(theme, push));
+  SettingsCubit({required this.theme, required this.push, required this.auth})
+    : super(SettingsState.initial(theme, push));
 
   final ThemeModeService theme;
   final PushService push;
@@ -114,13 +114,14 @@ class SettingsCubit extends Cubit<SettingsState> {
     } on Object {
       enabled = true;
     }
-    emit(state.copyWith(
-      notificationsEnabled: enabled,
-      pushAvailable: push.available,
-    ));
+    emit(
+      state.copyWith(
+        notificationsEnabled: enabled,
+        pushAvailable: push.available,
+      ),
+    );
   }
 
   void onLogoutRequested() => auth.add(const LogoutRequested());
   // LogoutRequested is defined in auth_bloc.dart and extends AuthEvent.
 }
-

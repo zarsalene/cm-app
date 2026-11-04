@@ -7,15 +7,11 @@ import 'package:flutter/material.dart';
 /// example by a cubit that catches exceptions), or globally via
 /// [installGlobalErrorWidget] in bootstrap.
 class ErrorBoundary extends StatefulWidget {
-  const ErrorBoundary({
-    super.key,
-    required this.child,
-    required this.fallback,
-  });
+  const ErrorBoundary({super.key, required this.child, required this.fallback});
 
   final Widget child;
   final Widget Function(Object error, StackTrace stack, VoidCallback onRetry)
-      fallback;
+  fallback;
 
   @override
   State<ErrorBoundary> createState() => _ErrorBoundaryState();
@@ -68,10 +64,7 @@ void installGlobalErrorWidget() {
               ),
             ),
             const SizedBox(height: 16),
-            FilledButton(
-              onPressed: () {},
-              child: const Text('Fermer'),
-            ),
+            FilledButton(onPressed: () {}, child: const Text('Fermer')),
           ],
         ),
       ),

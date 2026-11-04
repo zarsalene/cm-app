@@ -55,9 +55,7 @@ class App extends StatelessWidget {
           create: (_) =>
               kDemo ? const NoopPushService() : push ?? const NoopPushService(),
         ),
-        RepositoryProvider<ThemeModeService>(
-          create: (_) => themeMode,
-        ),
+        RepositoryProvider<ThemeModeService>(create: (_) => themeMode),
       ],
       child: BlocProvider(
         create: (context) => AuthBloc(
@@ -233,9 +231,11 @@ class _ConnectivityOverlayState extends State<_ConnectivityOverlay> {
       final online = results.any((r) => r != ConnectivityResult.none);
       if (mounted && online != _online) setState(() => _online = online);
     });
-    unawaited(ConnectivityService().isConnected.then((online) {
-      if (mounted) setState(() => _online = online);
-    }));
+    unawaited(
+      ConnectivityService().isConnected.then((online) {
+        if (mounted) setState(() => _online = online);
+      }),
+    );
   }
 
   @override

@@ -115,16 +115,13 @@ class _ProfileRow extends StatelessWidget {
         leading: Icon(icon, color: scheme.onSurfaceVariant),
         title: Text(
           label,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: scheme.onSurfaceVariant,
-              ),
+          style: Theme.of(context).textTheme.bodyMedium
+              ?.copyWith(color: scheme.onSurfaceVariant),
         ),
         trailing: Text(
           value,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: scheme.onSurface,
-              ),
+          style: Theme.of(context).textTheme.bodyMedium
+              ?.copyWith(fontWeight: FontWeight.w600, color: scheme.onSurface),
         ),
       ),
     );
