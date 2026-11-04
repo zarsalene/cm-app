@@ -419,11 +419,15 @@ class _RowState extends State<_Row> with SingleTickerProviderStateMixin {
   Widget build(BuildContext context) {
     final item = widget.item;
     final isOpen = item.status == 'open';
-    final name = Strings.customerLabel(item.customerName, item.senderId);
-    final time = Strings.relativeTime(item.escalatedAt);
     final channel = item.platform == 'whatsapp'
         ? Strings.whatsapp
         : Strings.facebook;
+    final name = Strings.customerLabel(
+      item.customerName,
+      item.senderId,
+      platform: item.platform,
+    );
+    final time = Strings.relativeTime(item.escalatedAt);
     final under15 = DateTime.now().difference(item.escalatedAt).inMinutes < 15;
 
     return Semantics(

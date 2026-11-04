@@ -134,14 +134,21 @@ abstract class Strings {
     _ => otherError,
   };
 
-  /// Customer name, or `Client …<last 4 of senderId>` when unknown.
-  static String customerLabel(String? name, String senderId) {
+  /// Customer name, or `Client <channel> …<last 4 of senderId>` when unknown.
+  /// [platform] is `facebook` or `whatsapp` — used for a better fallback label.
+  static String customerLabel(String? name, String senderId,
+      {String? platform}) {
     final trimmed = name?.trim() ?? '';
     if (trimmed.isNotEmpty) return trimmed;
+    final channel = switch (platform) {
+      'facebook' => Strings.facebook,
+      'whatsapp' => Strings.whatsapp,
+      _ => 'client',
+    };
     final tail = senderId.length > 4
         ? senderId.substring(senderId.length - 4)
         : senderId;
-    return '$customer …$tail';
+    return '$customer $channel …$tail';
   }
 
   /// "il y a 5 min", "il y a 2 h", "il y a 3 j".

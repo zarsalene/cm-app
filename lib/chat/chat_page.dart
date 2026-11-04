@@ -87,7 +87,11 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
       title: Text(
         chat == null
             ? Strings.chatTitle
-            : Strings.customerLabel(chat!.customerName, chat!.senderId),
+            : Strings.customerLabel(
+                chat!.customerName,
+                chat!.senderId,
+                platform: chat!.platform,
+              ),
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
         textDirection: _nameDirection(chat?.customerName),

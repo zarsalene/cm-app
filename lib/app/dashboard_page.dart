@@ -771,11 +771,15 @@ class _RecentRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isOpen = item.status == 'open';
-    final name = Strings.customerLabel(item.customerName, item.senderId);
-    final time = Strings.relativeTime(item.escalatedAt);
     final channel = item.platform == 'whatsapp'
         ? Strings.whatsapp
         : Strings.facebook;
+    final name = Strings.customerLabel(
+      item.customerName,
+      item.senderId,
+      platform: item.platform,
+    );
+    final time = Strings.relativeTime(item.escalatedAt);
 
     return Container(
       decoration: BoxDecoration(
@@ -882,16 +886,20 @@ class _PriorityList extends StatelessWidget {
         final index = entry.key;
         final item = entry.value;
         final isOpen = item.status == 'open';
-        final name = Strings.customerLabel(item.customerName, item.senderId);
+        final channel = item.platform == 'whatsapp'
+            ? Strings.whatsapp
+            : Strings.facebook;
+        final name = Strings.customerLabel(
+          item.customerName,
+          item.senderId,
+          platform: item.platform,
+        );
         final minutes = DateTime.now().difference(item.escalatedAt).inMinutes;
         final timeLabel = minutes < 60
             ? 'il y a $minutes min'
             : (minutes ~/ 60 < 24
                 ? 'il y a ${minutes ~/ 60} h'
                 : 'il y a ${minutes ~/ 60 ~/ 24} j');
-        final channel = item.platform == 'whatsapp'
-            ? Strings.whatsapp
-            : Strings.facebook;
 
         return InkWell(
           onTap: () => context.push('/chat/${item.platform}/${item.senderId}'),
