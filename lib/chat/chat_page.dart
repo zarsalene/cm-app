@@ -72,16 +72,13 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Size get preferredSize => const Size.fromHeight(kToolbarHeight);
-}
 
   @override
   Widget build(BuildContext context) {
     final sending = context.select<ChatCubit, bool>((c) => c.state.sending);
-    final chat = widget.chat;
-    final resolvedName =
-        chat?.customerName?.trim()?.isNotEmpty == true
-            ? chat!.customerName!
-            : Strings.cachedCustomerName(chat?.senderId);
+    final resolvedName = chat?.customerName?.trim()?.isNotEmpty == true
+        ? chat!.customerName!
+        : Strings.cachedCustomerName(chat?.senderId);
     return AppBar(
       // Opened from a push alert there is nothing to pop: go to the list.
       leading: IconButton(
@@ -152,8 +149,6 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
     return TextDirection.ltr;
   }
 }
-
-class _Loading extends StatelessWidget {
 
 class _Loading extends StatelessWidget {
   const _Loading();

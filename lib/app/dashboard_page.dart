@@ -748,7 +748,7 @@ class _RecentList extends StatelessWidget {
   }
 }
 
-class _RecentRow extends StatefulWidget {
+class _RecentRow extends StatelessWidget {
   const _RecentRow({
     required this.item,
     required this.theme,
@@ -760,69 +760,24 @@ class _RecentRow extends StatefulWidget {
   final ColorScheme scheme;
 
   @override
-  State<_RecentRow> createState() => _RecentRowState();
-}
-
-class _RecentRowState extends State<_RecentRow> {
-  String? _cachedName;
-
-  @override
-  void initState() {
-    super.initState();
-    _maybeCacheName();
-    _loadCachedName();
-  }
-
-  @override
-  void didUpdateWidget(_RecentRow oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    _maybeCacheName();
-    if (widget.item.customerName == null ||
-        widget.item.customerName!.trim().isEmpty) {
-      _loadCachedName();
-    }
-  }
-
-  void _maybeCacheName() {
-    if (widget.item.customerName?.trim()?.isNotEmpty == true) {
-      unawaited(
-        context.read<TokenStore>().cacheCustomerName(
-          widget.item.senderId,
-          widget.item.customerName!,
-        ),
-      );
-    }
-  }
-
-  Future<void> _loadCachedName() async {
-    final name = await context.read<TokenStore>().readCustomerName(
-      widget.item.senderId,
-    );
-    if (mounted) setState(() => _cachedName = name);
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final isOpen = widget.item.status == 'open';
-    final channel = widget.item.platform == 'whatsapp'
+    final isOpen = item.status == 'open';
+    final channel = item.platform == 'whatsapp'
         ? Strings.whatsapp
         : Strings.facebook;
-    final resolvedName = widget.item.customerName?.trim()?.isNotEmpty == true
-        ? widget.item.customerName!
-        : _cachedName;
     final name = Strings.customerLabel(
-      resolvedName,
-      widget.item.senderId,
-      platform: widget.item.platform,
+      item.customerName,
+      item.senderId,
+      platform: item.platform,
     );
-    final time = Strings.relativeTime(widget.item.escalatedAt);
+    final time = Strings.relativeTime(item.escalatedAt);
 
     return Container(
       decoration: BoxDecoration(
-        color: widget.scheme.surfaceContainer,
+        color: scheme.surfaceContainer,
         borderRadius: BorderRadius.all(Radius.circular(AppRadius.card)),
         border: Border.all(
-          color: widget.scheme.outlineVariant.withValues(alpha: 0.5),
+          color: scheme.outlineVariant.withValues(alpha: 0.5),
           width: 1,
         ),
       ),
@@ -832,11 +787,11 @@ class _RecentRowState extends State<_RecentRow> {
           children: [
             CircleAvatar(
               radius: 22,
-              backgroundColor: widget.scheme.primaryContainer,
+              backgroundColor: scheme.primaryContainer,
               child: Text(
                 name.isNotEmpty ? name[0].toUpperCase() : '?',
-                style: widget.theme.textTheme.bodyMedium?.copyWith(
-                  color: widget.scheme.onPrimaryContainer,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: scheme.onPrimaryContainer,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -852,7 +807,7 @@ class _RecentRowState extends State<_RecentRow> {
                     color: AppColors.alertAmber,
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: widget.scheme.surfaceContainer,
+                      color: scheme.surfaceContainer,
                       width: 2,
                     ),
                   ),
@@ -861,23 +816,23 @@ class _RecentRowState extends State<_RecentRow> {
             Positioned(
               right: -4,
               top: -4,
-              child: ChannelChip(widget.item.platform),
+              child: ChannelChip(item.platform),
             ),
           ],
         ),
         title: Text(
           name,
-          style: widget.theme.textTheme.bodyLarge?.copyWith(
+          style: theme.textTheme.bodyLarge?.copyWith(
             fontWeight: FontWeight.w600,
-            color: widget.scheme.onSurface,
+            color: scheme.onSurface,
           ),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
         subtitle: Text(
           '$channel \u00b7 $time',
-          style: widget.theme.textTheme.bodySmall?.copyWith(
-            color: widget.scheme.onSurfaceVariant,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: scheme.onSurfaceVariant,
           ),
         ),
         trailing: Container(
