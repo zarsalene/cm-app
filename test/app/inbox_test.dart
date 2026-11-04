@@ -6,6 +6,8 @@ import 'package:cm_app/core/theme_mode_service.dart';
 import 'package:cm_app/escalations/escalations_cubit.dart';
 import 'package:cm_app/escalations/escalations_page.dart';
 import 'package:cm_app/push/push_service.dart';
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -15,6 +17,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 class _MockCmApi extends Mock implements CmApi {}
 
 class _MockPushService extends Mock implements PushService {}
+
+Future<void> _settle(WidgetTester tester) async {
+  for (var i = 0; i < 10; i++) {
+    await tester.pump(const Duration(milliseconds: 100));
+  }
+}
 
 void main() {
   setUpAll(() async {
@@ -65,7 +73,7 @@ void main() {
       await cubit.load();
 
       await tester.pumpWidget(_testWidget(cubit));
-      await tester.pumpAndSettle();
+      await _settle(tester);
 
       final bob = find.text('Bob Durant');
       final alice = find.text('Alice Martin');
@@ -105,10 +113,10 @@ void main() {
       await cubit.load();
 
       await tester.pumpWidget(_testWidget(cubit));
-      await tester.pumpAndSettle();
+      await _settle(tester);
 
       await tester.tap(find.text(Strings.sortOldestFirst));
-      await tester.pumpAndSettle();
+      await _settle(tester);
 
       final alice = find.text('Alice Martin');
       final bob = find.text('Bob Durant');
@@ -148,13 +156,13 @@ void main() {
       await cubit.load();
 
       await tester.pumpWidget(_testWidget(cubit));
-      await tester.pumpAndSettle();
+      await _settle(tester);
 
       expect(find.text('Alice Martin'), findsOneWidget);
       expect(find.text('Bob Durant'), findsOneWidget);
 
       await tester.tap(find.text(Strings.whatsapp));
-      await tester.pumpAndSettle();
+      await _settle(tester);
 
       expect(find.text('Bob Durant'), findsOneWidget);
       expect(find.text('Alice Martin'), findsNothing);
@@ -188,10 +196,10 @@ void main() {
       await cubit.load();
 
       await tester.pumpWidget(_testWidget(cubit));
-      await tester.pumpAndSettle();
+      await _settle(tester);
 
       await tester.enterText(find.byType(TextField), 'Alice');
-      await tester.pumpAndSettle();
+      await _settle(tester);
 
       expect(find.text('Alice Martin'), findsOneWidget);
       expect(find.text('Bob Durant'), findsNothing);

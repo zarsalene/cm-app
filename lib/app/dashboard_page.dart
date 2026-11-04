@@ -136,6 +136,10 @@ class _DashboardBody extends StatelessWidget {
       );
     }
 
+    if (state.items.isEmpty && state.error == null) {
+      return _EmptyDashboard();
+    }
+
     return CustomScrollView(
       physics: const BouncingScrollPhysics(),
       slivers: [
@@ -300,9 +304,6 @@ class _DashboardBody extends StatelessWidget {
             ),
           ),
         ],
-        // Empty state when nothing exists
-        if (state.items.isEmpty && state.error == null && !state.loading)
-          const SliverToBoxAdapter(child: _EmptyDashboard()),
       ],
     );
   }
