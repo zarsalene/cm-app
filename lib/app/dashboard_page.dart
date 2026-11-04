@@ -840,21 +840,21 @@ class _RecentRow extends StatelessWidget {
           decoration: BoxDecoration(
             color: isOpen
                 ? AppColors.alertAmber.withValues(alpha: 0.12)
-                : widget.scheme.surfaceContainerHigh,
+                : scheme.surfaceContainerHigh,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
               color: isOpen
                   ? AppColors.alertAmber.withValues(alpha: 0.35)
-                  : widget.scheme.outlineVariant.withValues(alpha: 0.3),
+                  : scheme.outlineVariant.withValues(alpha: 0.3),
               width: 1,
             ),
           ),
           child: Text(
             isOpen ? Strings.open : Strings.closed,
-            style: widget.theme.textTheme.labelSmall?.copyWith(
+            style: theme.textTheme.labelSmall?.copyWith(
               color: isOpen
                   ? AppColors.alertAmber
-                  : widget.scheme.onSurfaceVariant,
+                  : scheme.onSurfaceVariant,
               fontWeight: FontWeight.w600,
               fontSize: 10,
             ),
@@ -893,7 +893,7 @@ class _PriorityList extends StatelessWidget {
   }
 }
 
-class _PriorityItem extends StatefulWidget {
+class _PriorityItem extends StatelessWidget {
   const _PriorityItem({
     required this.index,
     required this.item,
@@ -907,59 +907,13 @@ class _PriorityItem extends StatefulWidget {
   final ColorScheme scheme;
 
   @override
-  State<_PriorityItem> createState() => _PriorityItemState();
-}
-
-class _PriorityItemState extends State<_PriorityItem> {
-  String? _cachedName;
-
-  @override
-  void initState() {
-    super.initState();
-    _maybeCacheName();
-    _loadCachedName();
-  }
-
-  @override
-  void didUpdateWidget(_PriorityItem oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    _maybeCacheName();
-    if (widget.item.customerName == null ||
-        widget.item.customerName!.trim().isEmpty) {
-      _loadCachedName();
-    }
-  }
-
-  void _maybeCacheName() {
-    if (widget.item.customerName?.trim()?.isNotEmpty == true) {
-      unawaited(
-        context.read<TokenStore>().cacheCustomerName(
-          widget.item.senderId,
-          widget.item.customerName!,
-        ),
-      );
-    }
-  }
-
-  Future<void> _loadCachedName() async {
-    final name = await context.read<TokenStore>().readCustomerName(
-      widget.item.senderId,
-    );
-    if (mounted) setState(() => _cachedName = name);
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final item = widget.item;
     final isOpen = item.status == 'open';
     final channel = item.platform == 'whatsapp'
         ? Strings.whatsapp
         : Strings.facebook;
-    final resolvedName = item.customerName?.trim()?.isNotEmpty == true
-        ? item.customerName!
-        : _cachedName;
     final name = Strings.customerLabel(
-      resolvedName,
+      item.customerName,
       item.senderId,
       platform: item.platform,
     );
@@ -976,10 +930,10 @@ class _PriorityItemState extends State<_PriorityItem> {
       child: Container(
         margin: const EdgeInsets.only(bottom: AppSpacing.md),
         decoration: BoxDecoration(
-          color: widget.scheme.surfaceContainer,
+          color: scheme.surfaceContainer,
           borderRadius: BorderRadius.all(Radius.circular(AppRadius.card)),
           border: Border.all(
-            color: widget.scheme.outlineVariant.withValues(alpha: 0.5),
+            color: scheme.outlineVariant.withValues(alpha: 0.5),
             width: 1,
           ),
         ),
@@ -992,18 +946,18 @@ class _PriorityItemState extends State<_PriorityItem> {
                 width: 28,
                 height: 28,
                 decoration: BoxDecoration(
-                  color: widget.index == 0
+                  color: index == 0
                       ? AppColors.alertAmber.withValues(alpha: 0.2)
-                      : widget.scheme.surfaceContainerHigh,
+                      : scheme.surfaceContainerHigh,
                   shape: BoxShape.circle,
                 ),
                 child: Center(
                   child: Text(
-                    '${widget.index + 1}',
-                    style: widget.theme.textTheme.labelLarge?.copyWith(
-                      color: widget.index == 0
+                    '${index + 1}',
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      color: index == 0
                           ? AppColors.alertAmber
-                          : widget.scheme.onSurfaceVariant,
+                          : scheme.onSurfaceVariant,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -1019,9 +973,9 @@ class _PriorityItemState extends State<_PriorityItem> {
                         Expanded(
                           child: Text(
                             name,
-                            style: widget.theme.textTheme.bodyLarge?.copyWith(
+                            style: theme.textTheme.bodyLarge?.copyWith(
                               fontWeight: FontWeight.w600,
-                              color: widget.scheme.onSurface,
+                              color: scheme.onSurface,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -1043,7 +997,7 @@ class _PriorityItemState extends State<_PriorityItem> {
                           ),
                           child: Text(
                             'Prioritaire',
-                            style: widget.theme.textTheme.labelSmall?.copyWith(
+                            style: theme.textTheme.labelSmall?.copyWith(
                               color: AppColors.alertAmber,
                               fontWeight: FontWeight.w600,
                               fontSize: 9,
@@ -1061,14 +1015,14 @@ class _PriorityItemState extends State<_PriorityItem> {
                               ? Icons.message
                               : Icons.facebook,
                           size: 14,
-                          color: widget.scheme.onSurfaceVariant,
+                          color: scheme.onSurfaceVariant,
                         ),
                         const SizedBox(width: AppSpacing.xs),
                         Expanded(
                           child: Text(
                             '$channel \u00b7 $timeLabel',
-                            style: widget.theme.textTheme.bodySmall?.copyWith(
-                              color: widget.scheme.onSurfaceVariant,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: scheme.onSurfaceVariant,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -1081,14 +1035,14 @@ class _PriorityItemState extends State<_PriorityItem> {
                       item.reason,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: widget.theme.textTheme.bodyMedium?.copyWith(
-                        color: widget.scheme.onSurfaceVariant,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: scheme.onSurfaceVariant,
                       ),
                     ),
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right, color: widget.scheme.primary),
+              Icon(Icons.chevron_right, color: scheme.primary),
             ],
           ),
         ),

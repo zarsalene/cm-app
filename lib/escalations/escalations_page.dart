@@ -384,7 +384,6 @@ class _Row extends StatefulWidget {
 
 class _RowState extends State<_Row> with SingleTickerProviderStateMixin {
   bool _pushing = false;
-  String? _cachedName;
   late final AnimationController _enterController;
   late final Animation<double> _opacity;
   late final Animation<Offset> _slide;
@@ -402,42 +401,12 @@ class _RowState extends State<_Row> with SingleTickerProviderStateMixin {
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _enterController, curve: Curves.easeOut));
     _enterController.forward();
-    _maybeCacheName();
-    _loadCachedName();
-  }
-
-  @override
-  void didUpdateWidget(_Row oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    _maybeCacheName();
-    if (widget.item.customerName == null ||
-        widget.item.customerName!.trim().isEmpty) {
-      _loadCachedName();
-    }
   }
 
   @override
   void dispose() {
     _enterController.dispose();
     super.dispose();
-  }
-
-  void _maybeCacheName() {
-    if (widget.item.customerName?.trim()?.isNotEmpty == true) {
-      unawaited(
-        context.read<TokenStore>().cacheCustomerName(
-          widget.item.senderId,
-          widget.item.customerName!,
-        ),
-      );
-    }
-  }
-
-  Future<void> _loadCachedName() async {
-    final name = await context.read<TokenStore>().readCustomerName(
-      widget.item.senderId,
-    );
-    if (mounted) setState(() => _cachedName = name);
   }
 
   @override
@@ -447,11 +416,8 @@ class _RowState extends State<_Row> with SingleTickerProviderStateMixin {
     final channel = item.platform == 'whatsapp'
         ? Strings.whatsapp
         : Strings.facebook;
-    final resolvedName = item.customerName?.trim()?.isNotEmpty == true
-        ? item.customerName!
-        : _cachedName;
     final name = Strings.customerLabel(
-      resolvedName,
+      item.customerName,
       item.senderId,
       platform: item.platform,
     );

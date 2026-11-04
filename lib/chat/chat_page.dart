@@ -76,9 +76,7 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     final sending = context.select<ChatCubit, bool>((c) => c.state.sending);
-    final resolvedName = chat?.customerName?.trim()?.isNotEmpty == true
-        ? chat!.customerName!
-        : Strings.cachedCustomerName(chat?.senderId);
+    final resolvedName = chat?.customerName;
     return AppBar(
       // Opened from a push alert there is nothing to pop: go to the list.
       leading: IconButton(
