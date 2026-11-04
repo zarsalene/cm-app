@@ -79,6 +79,7 @@ class AppDrawer extends StatelessWidget {
                   label: Strings.profile,
                   onTap: () {
                     context.pop();
+                    context.go('/profile');
                   },
                 ),
                 _DrawerItem(
@@ -87,6 +88,7 @@ class AppDrawer extends StatelessWidget {
                   label: Strings.settings,
                   onTap: () {
                     context.pop();
+                    context.go('/settings');
                   },
                 ),
                 _DrawerItem(
@@ -95,6 +97,7 @@ class AppDrawer extends StatelessWidget {
                   label: Strings.help,
                   onTap: () {
                     context.pop();
+                    context.go('/help');
                   },
                 ),
               ],

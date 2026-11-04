@@ -2,10 +2,13 @@ import 'dart:async';
 import 'dart:developer';
 
 import 'package:bloc/bloc.dart';
+import 'package:cm_app/core/error/error_boundary.dart';
+import 'package:cm_app/core/theme_mode_service.dart';
 import 'package:cm_app/push/push_service.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AppBlocObserver extends BlocObserver {
   const new();
@@ -27,7 +30,8 @@ class AppBlocObserver extends BlocObserver {
 }
 
 Future<void> bootstrap(
-  FutureOr<Widget> Function(PushService push) builder,
+  FutureOr<Widget> Function(PushService push, ThemeModeService themeMode)
+      builder,
 ) async {
   FlutterError.onError = (details) {
     log(details.exceptionAsString(), stackTrace: details.stack);
@@ -35,10 +39,15 @@ Future<void> bootstrap(
 
   Bloc.observer = const AppBlocObserver();
 
+  installGlobalErrorWidget();
+
+  WidgetsFlutterBinding.ensureInitialized();
+  final prefs = await SharedPreferences.getInstance();
+  final themeMode = ThemeModeService(prefs);
+
   // The only place that picks the push service.
   PushService push;
   try {
-    WidgetsFlutterBinding.ensureInitialized();
     await Firebase.initializeApp();
     push = FcmPushService();
   } on Object {
@@ -47,5 +56,5 @@ Future<void> bootstrap(
     push = const NoopPushService();
   }
 
-  runApp(await builder(push));
+  runApp(await builder(push, themeMode));
 }

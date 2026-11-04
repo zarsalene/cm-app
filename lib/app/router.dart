@@ -9,7 +9,10 @@ import 'package:cm_app/chat/chat_cubit.dart';
 import 'package:cm_app/chat/chat_page.dart';
 import 'package:cm_app/escalations/escalations_cubit.dart';
 import 'package:cm_app/escalations/escalations_page.dart';
+import 'package:cm_app/help/help_page.dart';
 import 'package:cm_app/push/push_service.dart';
+import 'package:cm_app/profile/profile_page.dart';
+import 'package:cm_app/settings/settings_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -139,6 +142,18 @@ GoRouter createRouter(
           },
           child: const ChatPage(),
         ),
+      ),
+      GoRoute(
+        path: '/settings',
+        builder: (context, state) => const SettingsPage(),
+      ),
+      GoRoute(
+        path: '/profile',
+        builder: (context, state) => const ProfilePage(),
+      ),
+      GoRoute(
+        path: '/help',
+        builder: (context, state) => const HelpPage(),
       ),
     ],
   );

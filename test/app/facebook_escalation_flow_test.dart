@@ -3,9 +3,11 @@ import 'package:cm_app/app/splash_page.dart';
 import 'package:cm_app/app/strings.dart';
 import 'package:cm_app/app/view/app.dart';
 import 'package:cm_app/auth/token_store.dart';
+import 'package:cm_app/core/theme_mode_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../helpers/helpers.dart';
 
@@ -74,7 +76,11 @@ void main() {
         closed = true;
       });
 
-      await tester.pumpWidget(App(tokenStore: store, api: api));
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      await tester.pumpWidget(
+        App(tokenStore: store, api: api, themeMode: ThemeModeService(prefs)),
+      );
 
       // Splash plays for its full length, then login shows.
       await tester.pump(const Duration(milliseconds: 500));

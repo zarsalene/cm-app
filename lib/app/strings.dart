@@ -95,6 +95,24 @@ abstract class Strings {
   static const settings = 'Paramètres';
   static const help = 'Aide';
 
+  // Settings
+  static const appearance = 'Apparence';
+  static const themeMode = 'Thème';
+  static const themeLight = 'Clair';
+  static const themeDark = 'Sombre';
+  static const themeSystem = 'Système';
+  static const language = 'Langue';
+  static const notifications = 'Notifications';
+  static const pushNotifications = 'Notifications push';
+  static const account = 'Compte';
+  static const about = 'À propos';
+
+  // Help
+  static const faqTitle = 'Questions fréquentes';
+  static const contactTitle = 'Besoin d’aide ?';
+  static const contactBody =
+      'Écrivez-nous à support@z-smart-cm.tn ou ouvrez une conversation depuis l’app.';
+
   /// Error text for a failed call.
   static String errorFor(Object error) => switch (error) {
     NetworkException() => noConnection,
