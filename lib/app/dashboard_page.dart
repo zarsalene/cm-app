@@ -858,7 +858,11 @@ class _RecentRowState extends State<_RecentRow> {
                   ),
                 ),
               ),
-            Positioned(right: -4, top: -4, child: ChannelChip(widget.item.platform)),
+            Positioned(
+              right: -4,
+              top: -4,
+              child: ChannelChip(widget.item.platform),
+            ),
           ],
         ),
         title: Text(
@@ -893,7 +897,9 @@ class _RecentRowState extends State<_RecentRow> {
           child: Text(
             isOpen ? Strings.open : Strings.closed,
             style: widget.theme.textTheme.labelSmall?.copyWith(
-              color: isOpen ? AppColors.alertAmber : widget.scheme.onSurfaceVariant,
+              color: isOpen
+                  ? AppColors.alertAmber
+                  : widget.scheme.onSurfaceVariant,
               fontWeight: FontWeight.w600,
               fontSize: 10,
             ),

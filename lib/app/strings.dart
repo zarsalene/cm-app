@@ -134,19 +134,41 @@ abstract class Strings {
     _ => otherError,
   };
 
+  /// In-memory cache of customer names keyed by senderId.
+  /// Populated whenever the API returns a customerName; used as fallback
+  /// when a later response omits it, so the CM always sees a real name.
+  static final Map<String, String> _customerNameCache = {};
+
+  /// Cache a customer name for [senderId]. Call this whenever the API
+  /// returns a known name.
+  static void cacheCustomerName(String senderId, String name) {
+    final trimmed = name.trim();
+    if (trimmed.isNotEmpty) {
+      _customerNameCache[senderId] = trimmed;
+    }
+  }
+
+  /// Read a previously cached customer name for [senderId], or null.
+  static String? cachedCustomerName(String? senderId) {
+    if (senderId == null) return null;
+    return _customerNameCache[senderId];
+  }
+
   /// Customer name, or `Client <channel> …<last 4 of senderId>` when unknown.
   /// [platform] is `facebook` or `whatsapp` — used for a better fallback label.
-  /// [cachedName] is a previously cached name for [senderId] — used when the
-  /// API doesn't send a name but we remember it from a earlier conversation.
+  /// Caches [name] for future lookups when the API omits it.
   static String customerLabel(
     String? name,
     String senderId, {
     String? platform,
-    String? cachedName,
   }) {
     final trimmed = name?.trim() ?? '';
-    if (trimmed.isNotEmpty) return trimmed;
-    if (cachedName?.trim()?.isNotEmpty == true) return cachedName!.trim();
+    if (trimmed.isNotEmpty) {
+      _customerNameCache[senderId] = trimmed;
+      return trimmed;
+    }
+    final cached = _customerNameCache[senderId];
+    if (cached?.trim()?.isNotEmpty == true) return cached!.trim();
     final channel = switch (platform) {
       'facebook' => Strings.facebook,
       'whatsapp' => Strings.whatsapp,
