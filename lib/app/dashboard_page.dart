@@ -9,7 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
-/// Premium dashboard with real data from the escalations cubit.
+/// Premium dashboard: daily command center for community managers.
 /// Every button navigates to a real screen; nothing is a stub.
 class DashboardPage extends StatelessWidget {
   const DashboardPage({super.key});
@@ -22,14 +22,25 @@ class DashboardPage extends StatelessWidget {
 
     return BlocBuilder<EscalationsCubit, EscalationsState>(
       builder: (context, state) {
-        final openCount = state.items.where((i) => i.status == 'open').length;
-        final closedCount = state.items
+        final openItems = state.items.where((i) => i.status == 'open').toList();
+        final closedItems = state.items
             .where((i) => i.status == 'closed')
-            .length;
-        final under15 = state.items.where((i) {
-          if (i.status != 'open') return false;
+            .toList();
+        final under15 = openItems.where((i) {
           return DateTime.now().difference(i.escalatedAt).inMinutes < 15;
         }).length;
+        final today = DateTime.now();
+        final handledToday = closedItems.where((i) {
+          final d = i.escalatedAt;
+          return d.year == today.year &&
+              d.month == today.month &&
+              d.day == today.day;
+        }).length;
+
+        // Priority queue: oldest open escalations first (no backend priority
+        // field exists yet, so oldest-waits-longest is the fair rule).
+        final priorityItems = List<Escalation>.from(openItems)
+          ..sort((a, b) => a.escalatedAt.compareTo(b.escalatedAt));
 
         return Scaffold(
           drawer: const AppDrawer(),
@@ -57,20 +68,22 @@ class DashboardPage extends StatelessWidget {
             child: SafeArea(
               child: _DashboardBody(
                 state: state,
-                openCount: openCount,
-                closedCount: closedCount,
+                openItems: openItems,
+                closedItems: closedItems,
                 under15: under15,
+                handledToday: handledToday,
+                priorityItems: priorityItems,
                 theme: theme,
                 scheme: scheme,
               ),
             ),
           ),
-          floatingActionButton: openCount > 0
+          floatingActionButton: openItems.isNotEmpty
               ? FloatingActionButton.extended(
                   onPressed: () => context.go('/escalations'),
                   icon: const Icon(Icons.list),
                   label: Text(
-                    'Voir les ${openCount} ouverte${openCount > 1 ? 's' : ''}',
+                    'Voir les ${openItems.length} ouverte${openItems.length > 1 ? 's' : ''}',
                   ),
                   backgroundColor: scheme.primary,
                   foregroundColor: scheme.onPrimary,
@@ -90,24 +103,28 @@ class DashboardPage extends StatelessWidget {
 class _DashboardBody extends StatelessWidget {
   const _DashboardBody({
     required this.state,
-    required this.openCount,
-    required this.closedCount,
+    required this.openItems,
+    required this.closedItems,
     required this.under15,
+    required this.handledToday,
+    required this.priorityItems,
     required this.theme,
     required this.scheme,
   });
 
   final EscalationsState state;
-  final int openCount;
-  final int closedCount;
+  final List<Escalation> openItems;
+  final List<Escalation> closedItems;
   final int under15;
+  final int handledToday;
+  final List<Escalation> priorityItems;
   final ThemeData theme;
   final ColorScheme scheme;
 
   @override
   Widget build(BuildContext context) {
     if (state.loading && state.items.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return const _SkeletonDashboard();
     }
 
     if (state.error != null && state.items.isEmpty) {
@@ -122,7 +139,7 @@ class _DashboardBody extends StatelessWidget {
     return CustomScrollView(
       physics: const BouncingScrollPhysics(),
       slivers: [
-        // Welcome
+        // Welcome + last refreshed
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(
@@ -147,13 +164,27 @@ class _DashboardBody extends StatelessWidget {
                     LiveDot(color: scheme.primary),
                     const SizedBox(width: AppSpacing.xs),
                     Expanded(
-                      child: Text(
-                        '${state.items.length} escalade'
-                        '${state.items.length > 1 ? 's' : ''} au total · '
-                        '${Strings.liveLabel.toLowerCase()}',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${state.items.length} escalade'
+                            '${state.items.length > 1 ? 's' : ''} au total · '
+                            '${Strings.liveLabel.toLowerCase()}',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                          if (state.items.isNotEmpty && state.error == null)
+                            Text(
+                              'Dernière actualisation : il y a peu',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: scheme.onSurfaceVariant.withValues(
+                                  alpha: 0.6,
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                   ],
@@ -169,16 +200,47 @@ class _DashboardBody extends StatelessWidget {
           ),
           sliver: SliverToBoxAdapter(
             child: _StatRow(
-              openCount: openCount,
-              closedCount: closedCount,
+              openCount: openItems.length,
+              closedCount: closedItems.length,
               under15: under15,
               total: state.items.length,
+              handledToday: handledToday,
               theme: theme,
               scheme: scheme,
             ),
           ),
         ),
         const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xl)),
+        // Priority queue: à traiter en priorité
+        if (openItems.isNotEmpty) ...[
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.pageGutter,
+            ),
+            sliver: SliverToBoxAdapter(
+              child: _SectionHeader(
+                theme: theme,
+                title: Strings.priorityQueue,
+                subtitle: Strings.priorityQueueSubtitle,
+                onViewAll: () => context.go('/escalations'),
+              ),
+            ),
+          ),
+          const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.pageGutter,
+            ),
+            sliver: SliverToBoxAdapter(
+              child: _PriorityList(
+                items: priorityItems.take(5).toList(),
+                theme: theme,
+                scheme: scheme,
+              ),
+            ),
+          ),
+          const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xl)),
+        ],
         // Quick actions (only real destinations)
         SliverPadding(
           padding: const EdgeInsets.symmetric(
@@ -238,53 +300,105 @@ class _DashboardBody extends StatelessWidget {
             ),
           ),
         ],
+        // Empty state when nothing exists
+        if (state.items.isEmpty && state.error == null && !state.loading)
+          const SliverToBoxAdapter(child: _EmptyDashboard()),
       ],
     );
   }
 }
 
-class _ErrorState extends StatelessWidget {
-  const _ErrorState({
-    required this.theme,
-    required this.scheme,
-    required this.message,
-    required this.onRetry,
-  });
-
-  final ThemeData theme;
-  final ColorScheme scheme;
-  final String message;
-  final VoidCallback onRetry;
+class _SkeletonDashboard extends StatelessWidget {
+  const _SkeletonDashboard();
 
   @override
   Widget build(BuildContext context) {
+    final scheme = context.scheme;
+    return ListView(
+      padding: const EdgeInsets.all(AppSpacing.pageGutter),
+      children: [
+        Container(
+          height: 24,
+          width: 200,
+          color: scheme.surfaceContainerHigh,
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Container(
+          height: 80,
+          color: scheme.surfaceContainerHigh,
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        ...List.generate(4, (i) => _SkeletonCard(scheme: scheme)),
+      ],
+    );
+  }
+}
+
+class _SkeletonCard extends StatelessWidget {
+  const _SkeletonCard({required this.scheme});
+
+  final ColorScheme scheme;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.md),
+      height: 140,
+      color: scheme.surfaceContainerHigh,
+    );
+  }
+}
+
+class _EmptyDashboard extends StatelessWidget {
+  const _EmptyDashboard();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.scheme;
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.error_outline, color: scheme.error, size: 64),
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            'Erreur',
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: scheme.onSurface,
+          Container(
+            width: 96,
+            height: 96,
+            decoration: BoxDecoration(
+              color: scheme.primaryContainer,
+              shape: BoxShape.circle,
             ),
+            child: Icon(
+              Icons.inbox_outlined,
+              size: 40,
+              color: scheme.onPrimaryContainer,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.vertical16),
+          Text(
+            Strings.noEscalations,
+            style: themeTextStyle(context),
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            message,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodyMedium?.copyWith(
+            'Aucune conversation n\u2019a \u00e9t\u00e9 escalad\u00e9e pour le moment.',
+            style: context.theme.textTheme.bodyMedium?.copyWith(
               color: scheme.onSurfaceVariant,
             ),
+            textAlign: TextAlign.center,
           ),
-          const SizedBox(height: AppSpacing.lg),
-          FilledButton(onPressed: onRetry, child: const Text('Réessayer')),
         ],
       ),
     );
   }
+}
+
+TextStyle themeTextStyle(BuildContext context) {
+  return context.theme.textTheme.titleMedium?.copyWith(
+    fontWeight: FontWeight.w700,
+    color: context.scheme.onSurface,
+  ) ??
+      const TextStyle(
+        fontWeight: FontWeight.w700,
+      );
 }
 
 class _StatRow extends StatelessWidget {
@@ -293,6 +407,7 @@ class _StatRow extends StatelessWidget {
     required this.closedCount,
     required this.under15,
     required this.total,
+    required this.handledToday,
     required this.theme,
     required this.scheme,
   });
@@ -301,6 +416,7 @@ class _StatRow extends StatelessWidget {
   final int closedCount;
   final int under15;
   final int total;
+  final int handledToday;
   final ThemeData theme;
   final ColorScheme scheme;
 
@@ -326,7 +442,7 @@ class _StatRow extends StatelessWidget {
               child: _StatCard(
                 title: Strings.closedEscalations,
                 value: closedCount,
-                delta: 'résolues',
+                delta: 'r\u00e9solues',
                 color: scheme.primary,
                 icon: Icons.check_circle_outline,
               ),
@@ -348,12 +464,11 @@ class _StatRow extends StatelessWidget {
             const SizedBox(width: AppSpacing.md),
             Expanded(
               child: _StatCard(
-                title: 'Taux de clôture',
-                value: total > 0 ? (closedCount / total * 100).round() : 0,
-                suffix: '%',
-                delta: 'des escalades',
+                title: 'Traitees aujourd hui',
+                value: handledToday,
+                delta: 'conversations',
                 color: scheme.primary,
-                icon: Icons.timeline,
+                icon: Icons.chat_bubble_outline,
               ),
             ),
           ],
@@ -624,7 +739,6 @@ class _RecentList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Show most recent 5 only, newest first
     final sorted = List<Escalation>.from(items)
       ..sort((a, b) => b.escalatedAt.compareTo(a.escalatedAt));
     final recent = sorted.take(5).toList();
@@ -656,15 +770,11 @@ class _RecentRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isOpen = item.status == 'open';
-    final name = item.customerName?.isNotEmpty == true
-        ? item.customerName!
-        : 'Client …${item.senderId.length > 4 ? item.senderId.substring(item.senderId.length - 4) : item.senderId}';
-    final minutes = DateTime.now().difference(item.escalatedAt).inMinutes;
-    final time = minutes < 60
-        ? 'il y a $minutes min'
-        : (minutes ~/ 60 < 24
-              ? 'il y a ${minutes ~/ 60} h'
-              : 'il y a ${minutes ~/ 60 ~/ 24} j');
+    final name = Strings.customerLabel(item.customerName, item.senderId);
+    final time = Strings.relativeTime(item.escalatedAt);
+    final channel = item.platform == 'whatsapp'
+        ? Strings.whatsapp
+        : Strings.facebook;
 
     return Container(
       decoration: BoxDecoration(
@@ -720,7 +830,7 @@ class _RecentRow extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
         ),
         subtitle: Text(
-          time,
+          '$channel \u00b7 $time',
           style: theme.textTheme.bodySmall?.copyWith(
             color: scheme.onSurfaceVariant,
           ),
@@ -748,6 +858,210 @@ class _RecentRow extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _PriorityList extends StatelessWidget {
+  const _PriorityList({
+    required this.items,
+    required this.theme,
+    required this.scheme,
+  });
+
+  final List<Escalation> items;
+  final ThemeData theme;
+  final ColorScheme scheme;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: items.asMap().entries.map((entry) {
+        final index = entry.key;
+        final item = entry.value;
+        final isOpen = item.status == 'open';
+        final name = Strings.customerLabel(item.customerName, item.senderId);
+        final minutes = DateTime.now().difference(item.escalatedAt).inMinutes;
+        final timeLabel = minutes < 60
+            ? 'il y a $minutes min'
+            : (minutes ~/ 60 < 24
+                ? 'il y a ${minutes ~/ 60} h'
+                : 'il y a ${minutes ~/ 60 ~/ 24} j');
+        final channel = item.platform == 'whatsapp'
+            ? Strings.whatsapp
+            : Strings.facebook;
+
+        return InkWell(
+          onTap: () => context.push('/chat/${item.platform}/${item.senderId}'),
+          borderRadius: BorderRadius.all(Radius.circular(AppRadius.card)),
+          child: Container(
+            margin: const EdgeInsets.only(bottom: AppSpacing.md),
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainer,
+              borderRadius: BorderRadius.all(Radius.circular(AppRadius.card)),
+              border: Border.all(
+                color: scheme.outlineVariant.withValues(alpha: 0.5),
+                width: 1,
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: index == 0
+                          ? AppColors.alertAmber.withValues(alpha: 0.2)
+                          : scheme.surfaceContainerHigh,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: Text(
+                        '${index + 1}',
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          color: index == 0
+                              ? AppColors.alertAmber
+                              : scheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                name,
+                                style: theme.textTheme.bodyLarge?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  color: scheme.onSurface,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.xs),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.alertAmber.withValues(
+                                  alpha: 0.12,
+                                ),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              constraints: const BoxConstraints(
+                                minWidth: 0,
+                                minHeight: 0,
+                              ),
+                              child: Text(
+                                'Prioritaire',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: AppColors.alertAmber,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 9,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: AppSpacing.xs),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              channel == Strings.whatsapp
+                                  ? Icons.message
+                                  : Icons.facebook,
+                              size: 14,
+                              color: scheme.onSurfaceVariant,
+                            ),
+                            const SizedBox(width: AppSpacing.xs),
+                            Expanded(
+                              child: Text(
+                                '$channel \u00b7 $timeLabel',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: scheme.onSurfaceVariant,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: AppSpacing.xs),
+                        Text(
+                          item.reason,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.chevron_right, color: scheme.primary),
+                ],
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
+class _ErrorState extends StatelessWidget {
+  const _ErrorState({
+    required this.theme,
+    required this.scheme,
+    required this.message,
+    required this.onRetry,
+  });
+
+  final ThemeData theme;
+  final ColorScheme scheme;
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.error_outline, color: scheme.error, size: 64),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            'Erreur',
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: scheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          FilledButton(onPressed: onRetry, child: const Text('Reessayer')),
+        ],
       ),
     );
   }

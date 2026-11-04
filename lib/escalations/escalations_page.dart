@@ -10,6 +10,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
+/// Sort order for the escalation list.
+enum _SortOrder {
+  newestFirst,
+  oldestFirst,
+}
+
 class EscalationsPage extends StatefulWidget {
   const EscalationsPage({super.key});
 
@@ -27,6 +33,8 @@ class _EscalationsPageState extends State<EscalationsPage>
   bool _live = true;
   String _query = '';
   String? _channel;
+  _SortOrder _sort = _SortOrder.newestFirst;
+  Timer? _debounce;
 
   void _toggleLive() {
     setState(() => _live = !_live);
@@ -38,6 +46,15 @@ class _EscalationsPageState extends State<EscalationsPage>
       unawaited(_liveIcon.forward());
       _cubit.stopPolling();
     }
+  }
+
+  void _onQueryChanged(String value) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      if (mounted) {
+        setState(() => _query = value.trim().toLowerCase());
+      }
+    });
   }
 
   @override
@@ -53,6 +70,7 @@ class _EscalationsPageState extends State<EscalationsPage>
 
   @override
   void dispose() {
+    _debounce?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _cubit.stopPolling();
     _liveIcon.dispose();
@@ -119,11 +137,17 @@ class _EscalationsPageState extends State<EscalationsPage>
             const _OfflineNotice(),
             _FilterBar(
               channel: _channel,
-              onQuery: (q) => setState(() => _query = q.trim().toLowerCase()),
+              sortOrder: _sort,
+              onQuery: _onQueryChanged,
               onChannel: (c) => setState(() => _channel = c),
+              onSort: (s) => setState(() => _sort = s),
             ),
             Expanded(
-              child: _List(query: _query, channel: _channel),
+              child: _List(
+                query: _query,
+                channel: _channel,
+                sortOrder: _sort,
+              ),
             ),
           ],
         ),
@@ -135,13 +159,17 @@ class _EscalationsPageState extends State<EscalationsPage>
 class _FilterBar extends StatelessWidget {
   const _FilterBar({
     required this.channel,
+    required this.sortOrder,
     required this.onQuery,
     required this.onChannel,
+    required this.onSort,
   });
 
   final String? channel;
+  final _SortOrder sortOrder;
   final ValueChanged<String> onQuery;
   final ValueChanged<String?> onChannel;
+  final ValueChanged<_SortOrder> onSort;
 
   @override
   Widget build(BuildContext context) {
@@ -168,17 +196,35 @@ class _FilterBar extends StatelessWidget {
             alignment: AlignmentDirectional.centerStart,
             child: Wrap(
               spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.xs,
               children: [
-                for (final (value, label) in [
+                ...[
                   (null, Strings.allChannels),
                   ('facebook', Strings.facebook),
                   ('whatsapp', Strings.whatsapp),
-                ])
-                  ChoiceChip(
-                    label: Text(label),
-                    selected: channel == value,
-                    onSelected: (_) => onChannel(value),
+                ].map(
+                  (entry) => ChoiceChip(
+                    label: Text(entry.$2),
+                    selected: channel == entry.$1,
+                    onSelected: (_) => onChannel(entry.$1),
                   ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                const Text(
+                  Strings.trier,
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                ChoiceChip(
+                  label: Text(Strings.sortNewestFirst),
+                  selected: sortOrder == _SortOrder.newestFirst,
+                  onSelected: (_) => onSort(_SortOrder.newestFirst),
+                ),
+                ChoiceChip(
+                  label: Text(Strings.sortOldestFirst),
+                  selected: sortOrder == _SortOrder.oldestFirst,
+                  onSelected: (_) => onSort(_SortOrder.oldestFirst),
+                ),
               ],
             ),
           ),
@@ -216,10 +262,15 @@ class _NoResults extends StatelessWidget {
 }
 
 class _List extends StatelessWidget {
-  const _List({required this.query, required this.channel});
+  const _List({
+    required this.query,
+    required this.channel,
+    required this.sortOrder,
+  });
 
   final String query;
   final String? channel;
+  final _SortOrder sortOrder;
 
   bool _matches(Escalation e) {
     if (channel != null && e.platform != channel) return false;
@@ -231,6 +282,19 @@ class _List extends StatelessWidget {
     ].any((text) => text.toLowerCase().contains(query));
   }
 
+  List<Escalation> _sortAndFilter(List<Escalation> items) {
+    final filtered = items.where(_matches).toList();
+    filtered.sort((a, b) {
+      switch (sortOrder) {
+        case _SortOrder.newestFirst:
+          return b.escalatedAt.compareTo(a.escalatedAt);
+        case _SortOrder.oldestFirst:
+          return a.escalatedAt.compareTo(b.escalatedAt);
+      }
+    });
+    return filtered;
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<EscalationsCubit, EscalationsState>(
@@ -238,7 +302,7 @@ class _List extends StatelessWidget {
         if (state.items.isEmpty && state.loading) {
           return const _SkeletonList();
         }
-        final items = state.items.where(_matches).toList();
+        final items = _sortAndFilter(state.items);
         return RefreshIndicator(
           onRefresh: () => context.read<EscalationsCubit>().load(),
           child: ListView(

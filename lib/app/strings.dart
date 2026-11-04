@@ -99,6 +99,16 @@ abstract class Strings {
   static const resetSession = 'Réinitialiser la session';
   static const resetSessionSubtitle = 'Efface le token stocké et déconnecte';
 
+  // Priority queue
+  static const priorityQueue = 'À traiter en priorité';
+  static const priorityQueueSubtitle =
+      'Les conversations les plus anciennes en premier';
+
+  // Sort
+  static const trier = 'Trier';
+  static const sortNewestFirst = 'Plus r\u00e9centes d\u2019abord';
+  static const sortOldestFirst = 'Plus anciennes d\u2019abord';
+
   // Settings
   static const appearance = 'Apparence';
   static const themeMode = 'Thème';
