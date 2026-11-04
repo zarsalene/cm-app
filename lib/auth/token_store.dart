@@ -1,3 +1,7 @@
+import 'dart:async';
+import 'dart:developer';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 /// Keeps the session token and username in secure storage.
@@ -12,16 +16,57 @@ class TokenStore {
 
   final FlutterSecureStorage _storage;
 
+  /// Tests whether secure storage can write, read, and delete.
+  /// Returns `true` when credentials can be saved on this device.
+  Future<bool> testStorage() async {
+    try {
+      const testKey = 'cm_storage_test';
+      await _storage.write(key: testKey, value: 'ok');
+      final value = await _storage.read(key: testKey);
+      await _storage.delete(key: testKey);
+      if (kDebugMode) log('TokenStore.testStorage: $value');
+      return value == 'ok';
+    } on Object {
+      if (kDebugMode) log('TokenStore.testStorage: failed');
+      return false;
+    }
+  }
+
   /// The stored bearer token, or null.
-  Future<String?> read() => _storage.read(key: _tokenKey);
+  Future<String?> read() async {
+    try {
+      final value = await _storage.read(key: _tokenKey);
+      if (kDebugMode) log('TokenStore.read: $value');
+      return value;
+    } on Object {
+      if (kDebugMode) log('TokenStore.read: failed');
+      return null;
+    }
+  }
 
   /// The stored username, or null.
-  Future<String?> readUsername() => _storage.read(key: _usernameKey);
+  Future<String?> readUsername() async {
+    try {
+      final value = await _storage.read(key: _usernameKey);
+      if (kDebugMode) log('TokenStore.readUsername: $value');
+      return value;
+    } on Object {
+      if (kDebugMode) log('TokenStore.readUsername: failed');
+      return null;
+    }
+  }
 
   /// Whether "remember me" was selected at last login.
   Future<bool> readRememberMe() async {
-    final value = await _storage.read(key: _rememberMeKey);
-    return value == 'true';
+    try {
+      final value = await _storage.read(key: _rememberMeKey);
+      final result = value == 'true';
+      if (kDebugMode) log('TokenStore.readRememberMe: $result');
+      return result;
+    } on Object {
+      if (kDebugMode) log('TokenStore.readRememberMe: failed');
+      return false;
+    }
   }
 
   /// Saves the token, the username and the remember-me flag of a new session.
@@ -30,15 +75,25 @@ class TokenStore {
     required String username,
     required bool rememberMe,
   }) async {
-    await _storage.write(key: _tokenKey, value: token);
-    await _storage.write(key: _usernameKey, value: username);
-    await _storage.write(key: _rememberMeKey, value: rememberMe.toString());
+    try {
+      await _storage.write(key: _tokenKey, value: token);
+      await _storage.write(key: _usernameKey, value: username);
+      await _storage.write(key: _rememberMeKey, value: rememberMe.toString());
+      if (kDebugMode) log('TokenStore.write: saved for $username');
+    } on Object {
+      if (kDebugMode) log('TokenStore.write: failed');
+    }
   }
 
   /// Removes the session.
   Future<void> delete() async {
-    await _storage.delete(key: _tokenKey);
-    await _storage.delete(key: _usernameKey);
-    await _storage.delete(key: _rememberMeKey);
+    try {
+      await _storage.delete(key: _tokenKey);
+      await _storage.delete(key: _usernameKey);
+      await _storage.delete(key: _rememberMeKey);
+      if (kDebugMode) log('TokenStore.delete: session cleared');
+    } on Object {
+      if (kDebugMode) log('TokenStore.delete: failed');
+    }
   }
 }

@@ -95,6 +95,10 @@ abstract class Strings {
   static const settings = 'Paramètres';
   static const help = 'Aide';
 
+  // Session reset
+  static const resetSession = 'Réinitialiser la session';
+  static const resetSessionSubtitle = 'Efface le token stocké et déconnecte';
+
   // Settings
   static const appearance = 'Apparence';
   static const themeMode = 'Thème';

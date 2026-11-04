@@ -1,9 +1,12 @@
+import 'dart:developer';
+
 import 'package:bloc/bloc.dart';
 import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:cm_app/api/cm_api.dart';
 import 'package:cm_app/auth/token_store.dart';
 import 'package:cm_app/push/push_service.dart';
 import 'package:equatable/equatable.dart';
+import 'package:flutter/foundation.dart';
 
 sealed class AuthEvent extends Equatable {
   const new();
@@ -86,9 +89,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final PushService _push;
 
   Future<void> _onStarted(AuthStarted event, Emitter<AuthState> emit) async {
+    if (kDebugMode) log('AuthBloc._onStarted: restoring session');
     // If the user didn't check "Remember me", never auto-restore the session.
     final rememberMe = await _store.readRememberMe();
     if (!rememberMe) {
+      if (kDebugMode) log('AuthBloc._onStarted: remember me is false');
       emit(const Unauthenticated());
       return;
     }
@@ -100,11 +105,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       username = await _store.readUsername().timeout(_storageTimeout);
     } on Object {
       // Unreadable or stuck secure storage: ask for a new login.
+      if (kDebugMode) log('AuthBloc._onStarted: storage read failed');
     }
     if (token == null || username == null) {
+      if (kDebugMode) log('AuthBloc._onStarted: no token or username');
       emit(const Unauthenticated());
       return;
     }
+    if (kDebugMode) log('AuthBloc._onStarted: restored $username');
     emit(Authenticated(username));
     // Topic subscribe is safe to repeat on every start.
     await _quietly(() => _push.subscribe().timeout(_subscribeTimeout));
@@ -122,6 +130,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
     try {
       final session = await _api.login(username, event.password);
+      if (kDebugMode) log('AuthBloc._onLoginSubmitted: login ok for $username');
       await _store.write(
         token: session.token,
         username: session.username,
@@ -145,10 +154,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     LogoutRequested event,
     Emitter<AuthState> emit,
   ) async {
+    if (kDebugMode) log('AuthBloc._onLogoutRequested: logging out');
     // Before the delete: logout still needs the bearer token.
     await _quietly(() => _api.logout().timeout(_logoutTimeout));
     await _quietly(_store.delete);
     await _quietly(() => _push.unsubscribe().timeout(_unsubscribeTimeout));
+    if (kDebugMode) log('AuthBloc._onLogoutRequested: session cleared');
     emit(const Unauthenticated());
   }
 
@@ -158,9 +169,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   ) async {
     // A late 401 must not delete the token of a fresh login.
     if (state is! Authenticated) return;
+    if (kDebugMode) log('AuthBloc._onSessionExpired: token expired');
     await _quietly(_store.delete);
     emit(const Unauthenticated());
     await _quietly(() => _push.unsubscribe().timeout(_unsubscribeTimeout));
+    if (kDebugMode) log('AuthBloc._onSessionExpired: session cleared');
   }
 
   // Best effort: a failing call never blocks login or logout.

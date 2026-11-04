@@ -1,6 +1,7 @@
 import 'package:cm_app/app/strings.dart';
 import 'package:cm_app/app/theme.dart';
 import 'package:cm_app/auth/auth_bloc.dart';
+import 'package:cm_app/auth/token_store.dart';
 import 'package:cm_app/core/theme_mode_service.dart';
 import 'package:cm_app/push/push_service.dart';
 import 'package:cm_app/settings/settings_cubit.dart';
@@ -35,6 +36,26 @@ class _SettingsView extends StatefulWidget {
 
 class _SettingsViewState extends State<_SettingsView> {
   late final SettingsCubit _cubit = context.read<SettingsCubit>();
+  bool? _storageWorking;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkStorage();
+  }
+
+  Future<void> _checkStorage() async {
+    final store = context.read<TokenStore>();
+    final working = await store.testStorage();
+    if (mounted) setState(() => _storageWorking = working);
+  }
+
+  Future<void> _resetSession() async {
+    final store = context.read<TokenStore>();
+    await store.delete();
+    if (!mounted) return;
+    context.read<SettingsCubit>().onLogoutRequested();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -97,6 +118,43 @@ class _SettingsViewState extends State<_SettingsView> {
                 textColor: scheme.error,
                 iconColor: scheme.error,
                 onTap: () => _confirmLogout(context),
+              ),
+              _Tile(
+                icon: Icons.logout,
+                label: Strings.resetSession,
+                subtitle: Strings.resetSessionSubtitle,
+                textColor: scheme.error,
+                iconColor: scheme.error,
+                onTap: () => _confirmReset(context),
+              ),
+
+              const Divider(height: 1),
+
+              // --- Storage ---
+              _Section(title: 'Stockage'),
+              _Tile(
+                icon: _storageWorking == true
+                    ? Icons.check_circle
+                    : _storageWorking == false
+                        ? Icons.error
+                        : Icons.cloud_queue,
+                label: 'Mémorisation des identifiants',
+                subtitle: _storageWorking == true
+                    ? 'Le téléphone peut sauvegarder votre session'
+                    : _storageWorking == false
+                        ? 'Le stockage sécurisé ne fonctionne pas'
+                        : 'Vérification en cours…',
+                textColor: _storageWorking == true
+                    ? null
+                    : _storageWorking == false
+                        ? scheme.error
+                        : scheme.onSurfaceVariant,
+                iconColor: _storageWorking == true
+                    ? scheme.primary
+                    : _storageWorking == false
+                        ? scheme.error
+                        : scheme.onSurfaceVariant,
+                onTap: _storageWorking == null ? _checkStorage : null,
               ),
 
               const Divider(height: 1),
@@ -244,6 +302,65 @@ class _SettingsViewState extends State<_SettingsView> {
     ).then((ok) {
       if ((ok ?? false) && !kIsWeb) {
         context.read<SettingsCubit>().onLogoutRequested();
+      }
+    });
+  }
+
+  void _confirmReset(BuildContext context) {
+    final scheme = context.scheme;
+    showDialog<bool>(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(AppRadius.dialog)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.innerCardPadding),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.delete_forever, size: 48, color: scheme.error),
+              const SizedBox(height: AppSpacing.vertical16),
+              Text(
+                'Réinitialiser la session',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: scheme.onSurface,
+                    ),
+              ),
+              const SizedBox(height: AppSpacing.vertical12),
+              Text(
+                'Le token stocké sera effacé. Vous devrez vous reconnecter.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+              ),
+              const SizedBox(height: AppSpacing.vertical24),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.of(context).pop(false),
+                      child: const Text(Strings.cancel),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: () => Navigator.of(context).pop(true),
+                      child: const Text(Strings.confirm),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    ).then((ok) {
+      if ((ok ?? false) && !kIsWeb) {
+        _resetSession();
       }
     });
   }
