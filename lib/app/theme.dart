@@ -7,50 +7,59 @@ abstract class AppColors {
   static const logoTeal = Color(0xFF0D7A77);
   static const logoOrange = Color(0xFFE68003);
   static const deepTeal = Color(0xFF0A4F49);
-  static const alertAmber = Color(0xFFE68003);
+  static const alertAmber = Color(0xFFF59E0B);
   static const errorLight = Color(0xFFB91C1C);
   static const onErrorLight = Color(0xFFFFFFFF);
   static const errorDark = Color(0xFFFCA5A5);
   static const onErrorDark = Color(0xFF450A0A);
-  static const facebook = Color(0xFF1877F2);
+  static const facebook = Color(0xFF2563EB);
   static const onFacebook = Color(0xFFFFFFFF);
-  static const whatsapp = Color(0xFF25D366);
+  static const whatsapp = Color(0xFF10B981);
   static const onWhatsapp = Color(0xFF0B3D20);
+  static const violet = Color(0xFF8B5CF6);
+  static const urgentRed = Color(0xFFEF4444);
+  // Amber and red text must be darker on light surfaces to keep 4.5:1.
+  static const amberOnLight = Color(0xFFB45309);
+  static const urgentRedOnLight = Color(0xFFB91C1C);
 
   static const Color lightPrimary = Color(0xFF0D7A77);
-  static const Color darkPrimary = Color(0xFF2DB1A5);
+  static const Color darkPrimary = Color(0xFF7DD5D1);
   static const Color lightPrimaryContainer = Color(0xFFD3EEEA);
-  static const Color darkPrimaryContainer = Color(0xFF0F3F3A);
+  static const Color darkPrimaryContainer = Color(0xFF0D7A77);
   static const Color lightDeepTeal = Color(0xFF0A4F49);
   static const Color darkDeepTeal = Color(0xFF0A4F49);
   static const Color lightAccent = Color(0xFFE68003);
-  static const Color darkAccent = Color(0xFFF3C06B);
+  static const Color darkAccent = Color(0xFFFFB95F);
   static const Color lightSecondaryContainer = Color(0xFFFBE8C8);
-  static const Color darkSecondaryContainer = Color(0xFF3A2C12);
+  static const Color darkSecondaryContainer = Color(0xFFEE9800);
   static const Color lightSurface = Color(0xFFFAF8F3);
-  static const Color darkSurface = Color(0xFF0D1412);
+  static const Color darkSurface = Color(0xFF0C1418);
   static const Color lightCardSurface = Color(0xFFFFFFFF);
-  static const Color darkCardSurface = Color(0xFF151F1C);
+  static const Color darkCardSurface = Color(0xFF192125);
   static const Color lightSurfaceContainerHigh = Color(0xFFF2EFE6);
-  static const Color darkSurfaceContainerHigh = Color(0xFF1C2925);
+  static const Color darkSurfaceContainerHigh = Color(0xFF232B2F);
   static const Color lightOutlineVariant = Color(0xFFE4DFD0);
-  static const Color darkOutlineVariant = Color(0xFF2C3A35);
+  static const Color darkOutlineVariant = Color(0xFF3E4948);
   static const Color lightInk = Color(0xFF1C2622);
-  static const Color darkInk = Color(0xFFE7E3D8);
+  static const Color darkInk = Color(0xFFDBE4E9);
   static const Color lightOnSurfaceVariant = Color(0xFF5F6B66);
-  static const Color darkOnSurfaceVariant = Color(0xFFA9B3AE);
+  static const Color darkOnSurfaceVariant = Color(0xFFBDC9C7);
 
   // Premium dashboard colors
   static const Color lightSurfaceDim = Color(0xFFF5F2EA);
-  static const Color darkSurfaceDim = Color(0xFF111916);
+  static const Color darkSurfaceDim = Color(0xFF0C1418);
   static const Color lightCardElevated = Color(0xFFFFFFFF);
-  static const Color darkCardElevated = Color(0xFF1A2522);
+  static const Color darkCardElevated = Color(0xFF232B2F);
   static const Color lightGlass = Color(0x1AFFFFFF);
   static const Color darkGlass = Color(0x1A000000);
   static const Color lightAmberGlow = Color(0x1AE68003);
-  static const Color darkAmberGlow = Color(0x1AF3C06B);
+  static const Color darkAmberGlow = Color(0x1AFFB95F);
   static const Color lightPrimaryGlow = Color(0x1A0D7A77);
-  static const Color darkPrimaryGlow = Color(0x1A2DB1A5);
+  static const Color darkSurfaceLowest = Color(0xFF070F13);
+  static const Color darkSurfaceHighest = Color(0xFF2E363A);
+  static const Color darkOutline = Color(0xFF889392);
+
+  static const Color darkPrimaryGlow = Color(0x1A7DD5D1);
 }
 
 abstract class AppShadow {
@@ -95,12 +104,13 @@ abstract class AppSpacing {
 abstract class AppRadius {
   static const double chip = 12;
   static const double button = 16;
-  static const double card = 20;
+  static const double card = 24;
   static const double hero = 28;
   static const double dialog = 28;
   static const double bottomSheetTop = 28;
   static const double snackbar = 14;
-  static const double bubble = 20;
+  static const double bubble = 24;
+  static const double pill = 999;
 }
 
 final class AppTheme {
@@ -146,9 +156,7 @@ final class AppTheme {
           minimumSize: const Size.fromHeight(52),
           backgroundColor: AppColors.lightPrimary,
           foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(AppRadius.button)),
-          ),
+          shape: const StadiumBorder(),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -159,9 +167,7 @@ final class AppTheme {
             color: AppColors.lightOutlineVariant,
             width: 1,
           ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(AppRadius.button)),
-          ),
+          shape: const StadiumBorder(),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
@@ -242,9 +248,16 @@ final class AppTheme {
           fontSize: 13,
           fontWeight: FontWeight.w600,
         ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(AppRadius.chip)),
+        shape: const StadiumBorder(
           side: BorderSide(color: AppColors.lightOutlineVariant, width: 1),
+        ),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: Colors.white,
+        indicatorColor: AppColors.lightPrimaryContainer,
+        indicatorShape: const StadiumBorder(),
+        labelTextStyle: WidgetStatePropertyAll(
+          _plexStyle(AppColors.lightOnSurfaceVariant, 12, FontWeight.w600),
         ),
       ),
       pageTransitionsTheme: const PageTransitionsTheme(
@@ -268,21 +281,31 @@ final class AppTheme {
       brightness: Brightness.dark,
       colorScheme: ColorScheme.dark(
         primary: AppColors.darkPrimary,
-        onPrimary: Colors.black,
+        onPrimary: const Color(0xFF003735),
         primaryContainer: AppColors.darkPrimaryContainer,
-        onPrimaryContainer: Colors.white,
+        onPrimaryContainer: const Color(0xFFAEFFFB),
         secondary: AppColors.darkAccent,
-        onSecondary: Colors.black,
+        onSecondary: const Color(0xFF472A00),
         secondaryContainer: AppColors.darkSecondaryContainer,
-        onSecondaryContainer: Colors.white,
+        onSecondaryContainer: const Color(0xFF5B3800),
+        tertiary: const Color(0xFFB4C5FF),
+        onTertiary: const Color(0xFF002A78),
+        tertiaryContainer: AppColors.facebook,
+        onTertiaryContainer: const Color(0xFFEEEFFF),
         surface: AppColors.darkSurface,
         onSurface: AppColors.darkInk,
+        surfaceContainerLowest: AppColors.darkSurfaceLowest,
+        surfaceContainerLow: const Color(0xFF151D21),
         surfaceContainer: AppColors.darkCardSurface,
         surfaceContainerHigh: AppColors.darkSurfaceContainerHigh,
+        surfaceContainerHighest: AppColors.darkSurfaceHighest,
+        outline: AppColors.darkOutline,
         outlineVariant: AppColors.darkOutlineVariant,
         onSurfaceVariant: AppColors.darkOnSurfaceVariant,
         error: AppColors.errorDark,
         onError: AppColors.onErrorDark,
+        errorContainer: const Color(0xFF93000A),
+        onErrorContainer: const Color(0xFFFFDAD6),
         surfaceTint: AppColors.darkPrimary,
       ),
       scaffoldBackgroundColor: AppColors.darkSurface,
@@ -298,11 +321,9 @@ final class AppTheme {
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           minimumSize: const Size.fromHeight(52),
-          backgroundColor: AppColors.darkPrimary,
-          foregroundColor: Colors.black,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(AppRadius.button)),
-          ),
+          backgroundColor: AppColors.darkPrimaryContainer,
+          foregroundColor: Colors.white,
+          shape: const StadiumBorder(),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -310,9 +331,7 @@ final class AppTheme {
           minimumSize: const Size.fromHeight(52),
           foregroundColor: AppColors.darkPrimary,
           side: const BorderSide(color: AppColors.darkOutlineVariant, width: 1),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(AppRadius.button)),
-          ),
+          shape: const StadiumBorder(),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
@@ -387,9 +406,16 @@ final class AppTheme {
           fontSize: 13,
           fontWeight: FontWeight.w600,
         ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(AppRadius.chip)),
+        shape: const StadiumBorder(
           side: BorderSide(color: AppColors.darkOutlineVariant, width: 1),
+        ),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: AppColors.darkSurfaceLowest,
+        indicatorColor: AppColors.darkPrimaryContainer.withValues(alpha: 0.35),
+        indicatorShape: const StadiumBorder(),
+        labelTextStyle: WidgetStatePropertyAll(
+          _plexStyle(AppColors.darkOnSurfaceVariant, 12, FontWeight.w600),
         ),
       ),
       pageTransitionsTheme: const PageTransitionsTheme(
@@ -411,20 +437,21 @@ final class AppTheme {
       headlineLarge: TextStyle(
         fontFamily: _fontFamily,
         fontSize: 32,
-        fontWeight: FontWeight.w700,
+        fontWeight: FontWeight.w600,
+        letterSpacing: -0.64,
         color: ink,
       ),
       headlineMedium: TextStyle(
         fontFamily: _fontFamily,
         fontSize: 28,
-        fontWeight: FontWeight.w700,
+        fontWeight: FontWeight.w600,
         letterSpacing: -0.3,
         color: ink,
       ),
       titleLarge: TextStyle(
         fontFamily: _fontFamily,
         fontSize: 22,
-        fontWeight: FontWeight.w700,
+        fontWeight: FontWeight.w600,
         color: ink,
       ),
       titleMedium: TextStyle(
@@ -465,4 +492,14 @@ final class AppTheme {
 extension AppThemeX on BuildContext {
   ThemeData get theme => Theme.of(this);
   ColorScheme get scheme => Theme.of(this).colorScheme;
+
+  bool get isDarkTheme => Theme.of(this).brightness == Brightness.dark;
+
+  /// Amber for waiting / warning text and icons, readable on this theme.
+  Color get amber =>
+      isDarkTheme ? AppColors.alertAmber : AppColors.amberOnLight;
+
+  /// Red for breached / urgent text and icons, readable on this theme.
+  Color get urgent =>
+      isDarkTheme ? AppColors.urgentRed : AppColors.urgentRedOnLight;
 }

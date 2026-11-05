@@ -106,6 +106,15 @@ abstract class Strings {
   static const settings = 'Paramètres';
   static const help = 'Aide';
 
+  // Shell (Serene Operations)
+  static const navDashboard = 'Tableau';
+  static const navInbox = 'Boîte';
+  static const navSettings = 'Paramètres';
+  static const directTag = 'DIRECT';
+  static const online = 'En ligne';
+  static const botAuto = 'Bot auto';
+  static const youActive = 'Vous (Actif)';
+
   // Session reset
   static const resetSession = 'Réinitialiser la session';
   static const resetSessionSubtitle = 'Efface le token stocké et déconnecte';
@@ -169,6 +178,23 @@ abstract class Strings {
   /// `name[0]` would cut an emoji in half.
   static String initial(String name) =>
       name.isEmpty ? '?' : String.fromCharCode(name.runes.first).toUpperCase();
+
+  /// Up to two initials: "Sana Ben Ali" gives "SB".
+  static String initials(String name) {
+    final parts = name.trim().split(RegExp(r'\s+'));
+    return parts.length >= 2
+        ? initial(parts[0]) + initial(parts[1])
+        : initial(parts[0]);
+  }
+
+  /// "18m d'attente", "1h05 d'attente".
+  static String waiting(int minutes) {
+    final m = minutes < 0 ? 0 : minutes;
+    final span = m < 60
+        ? '${m}m'
+        : '${m ~/ 60}h${(m % 60).toString().padLeft(2, '0')}';
+    return "$span d'attente";
+  }
 
   /// "il y a 5 min", "il y a 2 h", "il y a 3 j".
   static String relativeTime(DateTime at, {DateTime? now}) {

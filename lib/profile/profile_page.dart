@@ -22,7 +22,8 @@ class ProfilePage extends StatelessWidget {
             title: Text(Strings.profile),
             leading: IconButton(
               icon: const Icon(Icons.arrow_back),
-              onPressed: () => context.pop(),
+              onPressed: () =>
+                  context.canPop() ? context.pop() : context.go('/'),
             ),
           ),
           body: Center(

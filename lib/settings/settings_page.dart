@@ -1,3 +1,4 @@
+import 'package:cm_app/app/serene_widgets.dart';
 import 'package:cm_app/app/strings.dart';
 import 'package:cm_app/app/theme.dart';
 import 'package:cm_app/auth/auth_bloc.dart';
@@ -58,11 +59,13 @@ class _SettingsViewState extends State<_SettingsView> {
     final scheme = context.scheme;
 
     return Scaffold(
+      bottomNavigationBar: const AppNavBar(current: 2),
       appBar: AppBar(
         title: Text(Strings.settings),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.pop(),
+          // go() from the menu leaves nothing to pop: fall back to the home.
+          onPressed: () => context.canPop() ? context.pop() : context.go('/'),
         ),
       ),
       body: BlocBuilder<SettingsCubit, SettingsState>(
