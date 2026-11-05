@@ -1,11 +1,12 @@
 import 'dart:async';
 
 import 'package:cm_app/api/cm_api.dart';
-import 'package:cm_app/app/channel_chip.dart';
 import 'package:cm_app/app/motion_widgets.dart';
+import 'package:cm_app/app/serene_widgets.dart';
 import 'package:cm_app/app/strings.dart';
 import 'package:cm_app/app/theme.dart';
 import 'package:cm_app/inbox/inbox_cubit.dart';
+import 'package:cm_app/inbox/inbox_strings.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -13,8 +14,22 @@ import 'package:go_router/go_router.dart';
 /// Sort order for the inbox.
 enum _SortOrder { newestFirst, oldestFirst }
 
-/// Which handler the user wants to see.
-enum _ModeFilter { all, human, bot }
+/// Which handler the user wants to see. `waiting` is the open escalations.
+enum _ModeFilter { all, waiting, human, bot }
+
+final _rtlChars = RegExp(r'[֐-׿؀-ۿݐ-ݿࢠ-ࣿﭐ-﷿ﹰ-﻿]');
+
+/// Arabic and Hebrew text reads right-to-left, per message.
+TextDirection _directionOf(String text) =>
+    _rtlChars.hasMatch(text) ? TextDirection.rtl : TextDirection.ltr;
+
+/// Minutes a customer has waited for a human, or null when no date is known.
+int? _waitMinutes(Conversation c) {
+  final since = c.escalatedAt ?? c.lastSeen;
+  if (since == null) return null;
+  final minutes = DateTime.now().difference(since).inMinutes;
+  return minutes < 0 ? 0 : minutes;
+}
 
 /// Unified WhatsApp + Facebook inbox.
 ///
@@ -29,13 +44,8 @@ class InboxPage extends StatefulWidget {
   State<InboxPage> createState() => _InboxPageState();
 }
 
-class _InboxPageState extends State<InboxPage>
-    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
+class _InboxPageState extends State<InboxPage> with WidgetsBindingObserver {
   late final InboxCubit _cubit = context.read<InboxCubit>();
-  late final AnimationController _liveIcon = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 250),
-  );
   bool _live = true;
   String _query = '';
   String? _channel;
@@ -46,11 +56,9 @@ class _InboxPageState extends State<InboxPage>
   void _toggleLive() {
     setState(() => _live = !_live);
     if (_live) {
-      unawaited(_liveIcon.reverse());
       _cubit.startPolling();
       unawaited(_cubit.refresh());
     } else {
-      unawaited(_liveIcon.forward());
       _cubit.stopPolling();
     }
   }
@@ -80,7 +88,6 @@ class _InboxPageState extends State<InboxPage>
     _debounce?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _cubit.stopPolling();
-    _liveIcon.dispose();
     super.dispose();
   }
 
@@ -103,73 +110,36 @@ class _InboxPageState extends State<InboxPage>
 
   @override
   Widget build(BuildContext context) {
+    final notificationsOff = context.select<InboxCubit, bool>(
+      (c) => c.state.notificationsOff,
+    );
     return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          tooltip: Strings.backToMenu,
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go('/'),
-        ),
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Flexible(
-              child: Text(
-                Strings.inboxTitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: context.theme.textTheme.titleLarge?.copyWith(
-                  fontSize: 19,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-            if (_live) ...[
-              const SizedBox(width: AppSpacing.xs),
-              LiveDot(color: context.scheme.primary),
-            ],
-          ],
-        ),
-        actions: [
-          IconButton(
-            tooltip: Strings.refresh,
-            icon: const Icon(Icons.refresh),
-            onPressed: () => context.read<InboxCubit>().load(),
+      appBar: BrandAppBar(notificationsOff: notificationsOff),
+      bottomNavigationBar: const AppNavBar(current: 1),
+      body: Column(
+        children: [
+          const _NotificationsBanner(),
+          const _OfflineNotice(),
+          _FilterBar(
+            live: _live,
+            channel: _channel,
+            mode: _mode,
+            sortOrder: _sort,
+            onToggleLive: _toggleLive,
+            onQuery: _onQueryChanged,
+            onChannel: (c) => setState(() => _channel = c),
+            onMode: (m) => setState(() => _mode = m),
+            onSort: (s) => setState(() => _sort = s),
           ),
-          IconButton(
-            tooltip: _live ? Strings.pauseLive : Strings.resumeLive,
-            icon: AnimatedIcon(
-              icon: AnimatedIcons.pause_play,
-              progress: _liveIcon,
-            ),
-            onPressed: _toggleLive,
-          ),
-        ],
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            const _NotificationsBanner(),
-            const _OfflineNotice(),
-            _FilterBar(
+          Expanded(
+            child: _List(
+              query: _query,
               channel: _channel,
               mode: _mode,
               sortOrder: _sort,
-              onQuery: _onQueryChanged,
-              onChannel: (c) => setState(() => _channel = c),
-              onMode: (m) => setState(() => _mode = m),
-              onSort: (s) => setState(() => _sort = s),
             ),
-            Expanded(
-              child: _List(
-                query: _query,
-                channel: _channel,
-                mode: _mode,
-                sortOrder: _sort,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -177,18 +147,22 @@ class _InboxPageState extends State<InboxPage>
 
 class _FilterBar extends StatelessWidget {
   const _FilterBar({
+    required this.live,
     required this.channel,
     required this.mode,
     required this.sortOrder,
+    required this.onToggleLive,
     required this.onQuery,
     required this.onChannel,
     required this.onMode,
     required this.onSort,
   });
 
+  final bool live;
   final String? channel;
   final _ModeFilter mode;
   final _SortOrder sortOrder;
+  final VoidCallback onToggleLive;
   final ValueChanged<String> onQuery;
   final ValueChanged<String?> onChannel;
   final ValueChanged<_ModeFilter> onMode;
@@ -196,82 +170,354 @@ class _FilterBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = context.scheme;
+    final text = context.theme.textTheme;
+    final conversations = context.select<InboxCubit, List<Conversation>>(
+      (c) => c.state.conversations,
+    );
+    final open = conversations.where((c) => c.status == 'open').length;
+    int onChannelCount(String platform) =>
+        conversations.where((c) => c.platform == platform).length;
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.pageGutter,
-        AppSpacing.sm,
+        AppSpacing.xs,
         AppSpacing.pageGutter,
         0,
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.xs,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              _LiveChip(live: live, onTap: onToggleLive),
+              if (open > 0)
+                StatusPill(
+                  label: InboxStrings.priorityThreads(open),
+                  color: context.amber,
+                  icon: Icons.bolt,
+                ),
+              SpinRefreshButton(
+                onPressed: () => context.read<InboxCubit>().load(),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xs),
           TextField(
             onChanged: onQuery,
             textInputAction: TextInputAction.search,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               hintText: Strings.searchHint,
-              prefixIcon: Icon(Icons.search),
-              isDense: true,
+              prefixIcon: const Icon(Icons.search),
+              filled: true,
+              fillColor: scheme.surfaceContainer,
+              border: _pillBorder(Colors.transparent),
+              enabledBorder: _pillBorder(
+                scheme.outlineVariant.withValues(alpha: 0.35),
+              ),
+              focusedBorder: _pillBorder(scheme.primary, width: 2),
             ),
           ),
-          const SizedBox(height: AppSpacing.sm),
-          Align(
-            alignment: AlignmentDirectional.centerStart,
-            child: Wrap(
-              spacing: AppSpacing.sm,
-              runSpacing: AppSpacing.xs,
+          const SizedBox(height: AppSpacing.vertical12),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
               children: [
-                ...[
-                  (null, Strings.allChannels),
-                  ('facebook', Strings.facebook),
-                  ('whatsapp', Strings.whatsapp),
-                ].map(
-                  (entry) => ChoiceChip(
-                    label: Text(entry.$2),
-                    selected: channel == entry.$1,
-                    onSelected: (_) => onChannel(entry.$1),
+                Text(
+                  InboxStrings.channelLabel,
+                  style: text.labelSmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.8,
                   ),
                 ),
-                const SizedBox(width: AppSpacing.md),
-                ...[
-                  (_ModeFilter.all, Strings.allConversations),
-                  (_ModeFilter.human, Strings.humanHandler),
-                  (_ModeFilter.bot, Strings.botHandler),
-                ].map(
-                  (entry) => ChoiceChip(
-                    label: Text(entry.$2),
-                    selected: mode == entry.$1,
-                    onSelected: (_) => onMode(entry.$1),
-                  ),
+                const SizedBox(width: AppSpacing.sm),
+                _FilterPill(
+                  label: Strings.allChannels,
+                  count: conversations.length,
+                  selected: channel == null,
+                  onTap: () => onChannel(null),
+                ),
+                _FilterPill(
+                  label: Strings.whatsapp,
+                  count: onChannelCount('whatsapp'),
+                  dot: AppColors.whatsapp,
+                  selected: channel == 'whatsapp',
+                  onTap: () => onChannel('whatsapp'),
+                ),
+                _FilterPill(
+                  label: Strings.facebook,
+                  count: onChannelCount('facebook'),
+                  dot: AppColors.facebook,
+                  selected: channel == 'facebook',
+                  onTap: () => onChannel('facebook'),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: AppSpacing.xs),
-          Align(
-            alignment: AlignmentDirectional.centerStart,
-            child: Wrap(
-              spacing: AppSpacing.sm,
-              runSpacing: AppSpacing.xs,
-              children: [
-                const Text(
-                  Strings.trier,
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          Row(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _FilterPill(
+                        label: Strings.allChannels,
+                        compact: true,
+                        selected: mode == _ModeFilter.all,
+                        onTap: () => onMode(_ModeFilter.all),
+                      ),
+                      _FilterPill(
+                        label: InboxStrings.waitingFilter,
+                        count: open,
+                        dot: context.amber,
+                        compact: true,
+                        selected: mode == _ModeFilter.waiting,
+                        onTap: () => onMode(_ModeFilter.waiting),
+                      ),
+                      _FilterPill(
+                        label: Strings.humanHandler,
+                        compact: true,
+                        selected: mode == _ModeFilter.human,
+                        onTap: () => onMode(_ModeFilter.human),
+                      ),
+                      _FilterPill(
+                        label: Strings.botHandler,
+                        compact: true,
+                        selected: mode == _ModeFilter.bot,
+                        onTap: () => onMode(_ModeFilter.bot),
+                      ),
+                    ],
+                  ),
                 ),
-                ChoiceChip(
-                  label: Text(Strings.sortNewestFirst),
-                  selected: sortOrder == _SortOrder.newestFirst,
-                  onSelected: (_) => onSort(_SortOrder.newestFirst),
+              ),
+              Tooltip(
+                message: InboxStrings.sortTooltip,
+                child: InkWell(
+                  customBorder: const StadiumBorder(),
+                  onTap: () => onSort(
+                    sortOrder == _SortOrder.newestFirst
+                        ? _SortOrder.oldestFirst
+                        : _SortOrder.newestFirst,
+                  ),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 48),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.sm,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            sortOrder == _SortOrder.newestFirst
+                                ? InboxStrings.sortRecent
+                                : InboxStrings.sortOldest,
+                            style: text.labelLarge?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.xs),
+                          Icon(
+                            Icons.swap_vert,
+                            size: 18,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
-                ChoiceChip(
-                  label: Text(Strings.sortOldestFirst),
-                  selected: sortOrder == _SortOrder.oldestFirst,
-                  onSelected: (_) => onSort(_SortOrder.oldestFirst),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ],
+      ),
+    );
+  }
+
+  static OutlineInputBorder _pillBorder(Color color, {double width = 1}) =>
+      OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        borderSide: BorderSide(color: color, width: width),
+      );
+}
+
+/// "Synchro en direct" status chip; a tap pauses or resumes the polling.
+class _LiveChip extends StatelessWidget {
+  const _LiveChip({required this.live, required this.onTap});
+
+  final bool live;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.scheme;
+    return Semantics(
+      button: true,
+      child: Tooltip(
+        message: live ? Strings.pauseLive : Strings.resumeLive,
+        child: InkWell(
+          customBorder: const StadiumBorder(),
+          onTap: onTap,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Center(
+              widthFactor: 1,
+              child: DecoratedBox(
+                decoration: ShapeDecoration(
+                  color: scheme.surfaceContainer,
+                  shape: StadiumBorder(
+                    side: BorderSide(
+                      color: scheme.outlineVariant.withValues(alpha: 0.5),
+                    ),
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md - 4,
+                    vertical: AppSpacing.xs + 2,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (live)
+                        LiveDot(color: scheme.primary, size: 6)
+                      else
+                        Icon(
+                          Icons.pause_circle_outline,
+                          size: 16,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      const SizedBox(width: AppSpacing.xs),
+                      Text(
+                        live ? InboxStrings.liveSync : InboxStrings.livePaused,
+                        style: context.theme.textTheme.labelLarge?.copyWith(
+                          color: scheme.onSurface,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Filter pill: selected = deep-teal tint with a teal border.
+class _FilterPill extends StatelessWidget {
+  const _FilterPill({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.count,
+    this.dot,
+    this.compact = false,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final int? count;
+  final Color? dot;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.scheme;
+    final text = context.theme.textTheme;
+    final foreground = selected ? scheme.onSurface : scheme.onSurfaceVariant;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: count == null ? label : '$label $count',
+      excludeSemantics: true,
+      onTap: onTap,
+      child: InkWell(
+        customBorder: const StadiumBorder(),
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48, minWidth: 48),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 3),
+            child: Center(
+              child: DecoratedBox(
+                decoration: ShapeDecoration(
+                  color: selected
+                      ? scheme.primaryContainer.withValues(alpha: 0.25)
+                      : scheme.surfaceContainer,
+                  shape: StadiumBorder(
+                    side: BorderSide(
+                      color: selected
+                          ? scheme.primary.withValues(alpha: 0.6)
+                          : scheme.outlineVariant.withValues(alpha: 0.5),
+                    ),
+                  ),
+                ),
+                child: Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: compact ? AppSpacing.md - 4 : AppSpacing.md - 2,
+                    vertical: AppSpacing.xs + 2,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (dot != null) ...[
+                        DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: dot,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const SizedBox.square(dimension: 8),
+                        ),
+                        const SizedBox(width: AppSpacing.xs + 2),
+                      ],
+                      Text(
+                        label,
+                        style: (compact ? text.labelMedium : text.labelLarge)
+                            ?.copyWith(
+                              color: foreground,
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                      if (count != null) ...[
+                        const SizedBox(width: AppSpacing.xs + 2),
+                        DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: scheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(AppRadius.pill),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.sm - 1,
+                              vertical: 1,
+                            ),
+                            child: Text(
+                              '$count',
+                              style: text.labelSmall?.copyWith(
+                                color: scheme.onSurface,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -319,6 +565,7 @@ class _List extends StatelessWidget {
 
   bool _matches(Conversation c) {
     if (channel != null && c.platform != channel) return false;
+    if (mode == _ModeFilter.waiting && c.status != 'open') return false;
     if (mode == _ModeFilter.human && c.mode != ChatMode.human) return false;
     if (mode == _ModeFilter.bot && c.mode != ChatMode.bot) return false;
     if (query.isEmpty) return true;
@@ -354,6 +601,9 @@ class _List extends StatelessWidget {
         final open = items.where((i) => i.status == 'open').toList();
         final active = items.where((i) => i.status == 'active').toList();
         final closed = items.where((i) => i.status == 'closed').toList();
+        final noneWaiting =
+            state.conversations.isNotEmpty &&
+            !state.conversations.any((c) => c.status == 'open');
 
         return RefreshIndicator(
           onRefresh: () => context.read<InboxCubit>().load(),
@@ -372,7 +622,7 @@ class _List extends StatelessWidget {
                 _SectionHeader(
                   title: Strings.humanSection,
                   count: open.length,
-                  color: AppColors.alertAmber,
+                  color: context.amber,
                 ),
                 for (final item in open) _ConversationRow(item: item),
               ],
@@ -392,6 +642,17 @@ class _List extends StatelessWidget {
                 ),
                 for (final item in closed) _ConversationRow(item: item),
               ],
+              if (noneWaiting)
+                Padding(
+                  padding: const EdgeInsets.all(AppSpacing.vertical24),
+                  child: Text(
+                    InboxStrings.allAssigned,
+                    textAlign: TextAlign.center,
+                    style: context.theme.textTheme.labelLarge?.copyWith(
+                      color: context.scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
               const SizedBox(height: AppSpacing.xl),
             ],
           ),
@@ -417,19 +678,15 @@ class _SectionHeader extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.pageGutter,
-        AppSpacing.vertical24,
+        AppSpacing.vertical16,
         AppSpacing.pageGutter,
-        AppSpacing.vertical8,
+        AppSpacing.xs,
       ),
       child: Row(
         children: [
-          Container(
-            width: 4,
-            height: 18,
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(9),
-            ),
+          DecoratedBox(
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            child: const SizedBox.square(dimension: 8),
           ),
           const SizedBox(width: AppSpacing.sm),
           Text(
@@ -453,46 +710,22 @@ class _ConversationRow extends StatefulWidget {
   State<_ConversationRow> createState() => _ConversationRowState();
 }
 
-class _ConversationRowState extends State<_ConversationRow>
-    with SingleTickerProviderStateMixin {
+class _ConversationRowState extends State<_ConversationRow> {
   bool _pushing = false;
-  late final AnimationController _enterController;
-  late final Animation<double> _opacity;
-  late final Animation<Offset> _slide;
-
-  @override
-  void initState() {
-    super.initState();
-    _enterController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 200),
-    );
-    _opacity = CurvedAnimation(parent: _enterController, curve: Curves.easeOut);
-    _slide = Tween<Offset>(
-      begin: const Offset(0, 0.15),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _enterController, curve: Curves.easeOut));
-    _enterController.forward();
-  }
-
-  @override
-  void dispose() {
-    _enterController.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
     final item = widget.item;
     final scheme = context.scheme;
+    final text = context.theme.textTheme;
     final name = Strings.customerLabel(
       item.customerName,
       item.senderId,
       platform: item.platform,
     );
-    final hasName = (item.customerName ?? '').trim().isNotEmpty;
     final isOpen = item.status == 'open';
     final isBot = item.status == 'active';
+    final human = item.mode == ChatMode.human;
     final toggling = context.select<InboxCubit, bool>(
       (c) => c.state.toggling.contains(_key(item)),
     );
@@ -501,170 +734,200 @@ class _ConversationRowState extends State<_ConversationRow>
         : (item.reason.trim().isNotEmpty
               ? item.reason.trim()
               : Strings.noRecentMessage);
+    final reason = item.reason.trim();
     final hasTime = item.lastSeen != null || item.escalatedAt != null;
+    final minutes = _waitMinutes(item);
+    final urgent =
+        minutes != null && waitSeverity(minutes) == WaitSeverity.urgent;
 
-    return Semantics(
-      button: true,
-      excludeSemantics: true,
-      label:
-          '$name, ${item.platform == 'whatsapp' ? Strings.whatsapp : Strings.facebook}, '
-          '$preview, ${isOpen ? Strings.humanHandler : (isBot ? Strings.botHandler : Strings.closed)}',
-      onTap: () => _open(context),
-      child: FadeTransition(
-        opacity: _opacity,
-        child: SlideTransition(
-          position: _slide,
-          child: InkWell(
-            onTap: () => _open(context),
-            child: Container(
-              margin: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.pageGutter,
-                vertical: AppSpacing.vertical8,
-              ),
-              decoration: BoxDecoration(
-                color: scheme.surfaceContainer,
-                borderRadius: BorderRadius.all(Radius.circular(AppRadius.card)),
-                border: isOpen
-                    ? const BorderDirectional(
-                        start: BorderSide(
-                          color: AppColors.alertAmber,
-                          width: 4,
-                        ),
-                      )
-                    : Border.all(
-                        color: scheme.outlineVariant.withValues(alpha: 0.5),
-                        width: 1,
-                      ),
-                boxShadow: [AppShadow.card],
-              ),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.innerCardPadding,
-                  AppSpacing.vertical12,
-                  AppSpacing.sm,
-                  AppSpacing.vertical12,
-                ),
-                child: Row(
+    final Widget pill = isOpen && minutes != null
+        ? WaitPill(minutes: minutes)
+        : switch (item.status) {
+            'open' => StatusPill(
+              label: Strings.humanHandler,
+              color: context.amber,
+              icon: Icons.person_outline,
+            ),
+            'active' => StatusPill(
+              label: Strings.botSection,
+              color: scheme.primary,
+              icon: Icons.smart_toy_outlined,
+            ),
+            _ => StatusPill(
+              label: InboxStrings.closedPill,
+              color: scheme.onSurfaceVariant,
+              icon: Icons.check_circle_outline,
+            ),
+          };
+    final summary =
+        '$name, ${item.platform == 'whatsapp' ? Strings.whatsapp : Strings.facebook}, '
+        '$preview, ${isOpen ? (minutes == null ? Strings.humanHandler : Strings.waiting(minutes)) : (isBot ? Strings.botSection : Strings.closed)}';
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.pageGutter,
+        vertical: AppSpacing.xs + 2,
+      ),
+      child: Semantics(
+        container: true,
+        button: true,
+        label: summary,
+        onTap: () => _open(context),
+        child: ThreadCard(
+          stripe: isOpen
+              ? (urgent ? context.urgent : context.amber)
+              : (isBot ? scheme.outline : null),
+          onTap: () => _open(context),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ExcludeSemantics(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Stack(
-                      clipBehavior: Clip.none,
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        CircleAvatar(
-                          radius: 22,
-                          backgroundColor: scheme.primaryContainer,
-                          child: hasName
-                              ? Text(
-                                  _initials(name),
-                                  style: context.theme.textTheme.bodyMedium
-                                      ?.copyWith(
-                                        color: scheme.onPrimaryContainer,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                )
-                              : Icon(
-                                  Icons.person_outline,
-                                  color: scheme.onPrimaryContainer,
-                                ),
+                        InitialsAvatar(
+                          name: name,
+                          platform: item.platform,
+                          size: 52,
                         ),
-                        if (isOpen)
-                          Positioned(
-                            right: -6,
-                            bottom: -6,
-                            child: Container(
-                              width: 10,
-                              height: 10,
-                              decoration: const BoxDecoration(
-                                color: AppColors.alertAmber,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                          ),
-                        Positioned(
-                          right: -6,
-                          top: -6,
-                          child: ChannelChip(item.platform),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(width: AppSpacing.md),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
+                        const SizedBox(width: AppSpacing.md - 2),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Expanded(
-                                child: Text(
-                                  name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: context.theme.textTheme.titleMedium
-                                      ?.copyWith(
-                                        fontWeight: isOpen
-                                            ? FontWeight.w700
-                                            : FontWeight.w600,
-                                        color: isOpen
-                                            ? scheme.onSurface
-                                            : scheme.onSurfaceVariant,
-                                      ),
+                              Text(
+                                name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: text.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
-                              if (hasTime) ...[
-                                const SizedBox(width: AppSpacing.xs),
+                              if (hasTime)
                                 Text(
                                   Strings.relativeTime(item.sortAt),
-                                  style: context.theme.textTheme.labelSmall
-                                      ?.copyWith(
-                                        color: scheme.onSurfaceVariant,
-                                      ),
+                                  style: text.labelMedium?.copyWith(
+                                    color: scheme.onSurfaceVariant,
+                                  ),
                                 ),
-                              ],
                             ],
                           ),
-                          const SizedBox(height: AppSpacing.xs),
-                          Text(
-                            preview,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: context.theme.textTheme.bodyMedium?.copyWith(
-                              color: scheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.xs),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        _StatusChip(item: item),
-                        const SizedBox(height: AppSpacing.xs),
-                        _ToggleButton(
-                          item: item,
-                          toggling: toggling,
-                          onTakeOver: () => _takeOver(context),
-                          onGiveBack: () => _confirmGiveBack(context),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 150),
+                          child: pill,
                         ),
                       ],
                     ),
+                    const SizedBox(height: AppSpacing.vertical12),
+                    Text(
+                      '« $preview »',
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      textDirection: _directionOf(preview),
+                      style: text.bodyMedium?.copyWith(
+                        fontSize: 15,
+                        height: 1.4,
+                        color: scheme.onSurface,
+                      ),
+                    ),
+                    if (reason.isNotEmpty && reason != preview) ...[
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        '${Strings.reasonPrefix}$reason',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textDirection: _directionOf(reason),
+                        style: text.labelMedium?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
-            ),
+              const SizedBox(height: AppSpacing.sm),
+              Align(
+                alignment: AlignmentDirectional.centerEnd,
+                child: toggling
+                    ? const SizedBox.square(
+                        dimension: 48,
+                        child: Padding(
+                          padding: EdgeInsets.all(14),
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : Wrap(
+                        alignment: WrapAlignment.end,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: AppSpacing.sm,
+                        runSpacing: AppSpacing.xs,
+                        children: human
+                            ? [
+                                Tooltip(
+                                  message: Strings.activateBot,
+                                  child: FilledButton.icon(
+                                    style: _action(
+                                      background:
+                                          scheme.surfaceContainerHighest,
+                                      foreground: scheme.onSurface,
+                                    ),
+                                    onPressed: () => _confirmGiveBack(context),
+                                    icon: const Icon(
+                                      Icons.smart_toy_outlined,
+                                      size: 18,
+                                    ),
+                                    label: const Text(Strings.giveBack),
+                                  ),
+                                ),
+                              ]
+                            : [
+                                TextButton.icon(
+                                  style: TextButton.styleFrom(
+                                    minimumSize: const Size(0, 48),
+                                    foregroundColor: scheme.onSurfaceVariant,
+                                  ),
+                                  onPressed: () => _open(context),
+                                  icon: const Icon(
+                                    Icons.visibility_outlined,
+                                    size: 18,
+                                  ),
+                                  label: const Text(InboxStrings.watch),
+                                ),
+                                Tooltip(
+                                  message: Strings.takeOver,
+                                  child: FilledButton.icon(
+                                    style: _action(),
+                                    onPressed: () => _takeOver(context),
+                                    icon: const Icon(
+                                      Icons.touch_app_outlined,
+                                      size: 18,
+                                    ),
+                                    label: const Text(Strings.takeOver),
+                                  ),
+                                ),
+                              ],
+                      ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
-  String _initials(String name) {
-    final parts = name.trim().split(RegExp(r'\s+'));
-    if (parts.length >= 2) {
-      return Strings.initial(parts[0]) + Strings.initial(parts[1]);
-    }
-    return Strings.initial(parts[0]);
-  }
+  // The theme's FilledButton is full width: a row of buttons needs 0.
+  static ButtonStyle _action({Color? background, Color? foreground}) =>
+      FilledButton.styleFrom(
+        minimumSize: const Size(0, 48),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+        backgroundColor: background,
+        foregroundColor: foreground,
+      );
 
   Future<void> _open(BuildContext context) async {
     if (_pushing) return;
@@ -681,7 +944,9 @@ class _ConversationRowState extends State<_ConversationRow>
   }
 
   void _takeOver(BuildContext context) {
-    context.read<InboxCubit>().setAiMode(widget.item, ChatMode.human);
+    unawaited(
+      context.read<InboxCubit>().setAiMode(widget.item, ChatMode.human),
+    );
   }
 
   Future<void> _confirmGiveBack(BuildContext context) async {
@@ -711,77 +976,6 @@ class _ConversationRowState extends State<_ConversationRow>
   static String _key(Conversation c) => '${c.platform}/${c.senderId}';
 }
 
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.item});
-
-  final Conversation item;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = context.scheme;
-    final (label, color) = switch (item.status) {
-      'open' => (Strings.humanHandler, AppColors.alertAmber),
-      'active' => (Strings.botHandler, scheme.primary),
-      _ => (Strings.closed, scheme.onSurfaceVariant),
-    };
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical: 2,
-      ),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(AppRadius.chip),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Text(
-        label,
-        style: context.theme.textTheme.labelSmall?.copyWith(
-          color: color,
-          fontWeight: FontWeight.w700,
-          fontSize: 10,
-        ),
-      ),
-    );
-  }
-}
-
-class _ToggleButton extends StatelessWidget {
-  const _ToggleButton({
-    required this.item,
-    required this.toggling,
-    required this.onTakeOver,
-    required this.onGiveBack,
-  });
-
-  final Conversation item;
-  final bool toggling;
-  final VoidCallback onTakeOver;
-  final VoidCallback onGiveBack;
-
-  @override
-  Widget build(BuildContext context) {
-    if (toggling) {
-      return const SizedBox(
-        width: 32,
-        height: 32,
-        child: Padding(
-          padding: EdgeInsets.all(8),
-          child: CircularProgressIndicator(strokeWidth: 2),
-        ),
-      );
-    }
-    final human = item.mode == ChatMode.human;
-    return IconButton(
-      tooltip: human ? Strings.activateBot : Strings.takeOver,
-      visualDensity: VisualDensity.compact,
-      iconSize: 20,
-      icon: Icon(human ? Icons.smart_toy_outlined : Icons.person_outline),
-      onPressed: human ? onGiveBack : onTakeOver,
-    );
-  }
-}
-
 class _SkeletonList extends StatelessWidget {
   const _SkeletonList();
 
@@ -803,20 +997,22 @@ class _SkeletonRow extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(
         horizontal: AppSpacing.pageGutter,
-        vertical: AppSpacing.vertical8,
+        vertical: AppSpacing.xs + 2,
       ),
       decoration: BoxDecoration(
         color: scheme.surfaceContainer,
         borderRadius: BorderRadius.all(Radius.circular(AppRadius.card)),
-        border: Border.all(color: scheme.outlineVariant, width: 1),
+        border: Border.all(
+          color: scheme.outlineVariant.withValues(alpha: 0.35),
+        ),
       ),
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.innerCardPadding),
         child: Row(
           children: [
             Container(
-              width: 44,
-              height: 44,
+              width: 52,
+              height: 52,
               decoration: BoxDecoration(
                 color: scheme.surfaceContainerHigh,
                 shape: BoxShape.circle,
@@ -832,16 +1028,16 @@ class _SkeletonRow extends StatelessWidget {
                     height: 16,
                     decoration: BoxDecoration(
                       color: scheme.surfaceContainerHigh,
-                      borderRadius: BorderRadius.circular(4),
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
                     ),
                   ),
-                  const SizedBox(height: AppSpacing.xs),
+                  const SizedBox(height: AppSpacing.sm),
                   Container(
                     width: 180,
                     height: 14,
                     decoration: BoxDecoration(
                       color: scheme.surfaceContainerHigh,
-                      borderRadius: BorderRadius.circular(4),
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
                     ),
                   ),
                 ],
@@ -867,14 +1063,10 @@ class _EmptyState extends StatelessWidget {
           width: 96,
           height: 96,
           decoration: BoxDecoration(
-            color: scheme.primaryContainer,
+            color: scheme.primaryContainer.withValues(alpha: 0.35),
             shape: BoxShape.circle,
           ),
-          child: Icon(
-            Icons.forum_outlined,
-            size: 40,
-            color: scheme.onPrimaryContainer,
-          ),
+          child: Icon(Icons.forum_outlined, size: 40, color: scheme.primary),
         ),
         const SizedBox(height: AppSpacing.vertical16),
         Text(
@@ -907,33 +1099,31 @@ class _NotificationsBanner extends StatelessWidget {
       (c) => c.state.notificationsOff,
     );
     if (!off) return const SizedBox.shrink();
-    final scheme = context.scheme;
+    final amber = context.amber;
     return Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.pageGutter,
-        vertical: AppSpacing.vertical8,
+        vertical: AppSpacing.xs,
       ),
       child: Semantics(
         liveRegion: true,
         child: Container(
-          padding: const EdgeInsets.all(AppSpacing.md),
+          padding: const EdgeInsets.all(AppSpacing.md - 4),
           decoration: BoxDecoration(
-            color: scheme.secondaryContainer,
+            color: amber.withValues(alpha: 0.15),
             borderRadius: BorderRadius.all(Radius.circular(AppRadius.card)),
-            border: Border.all(color: scheme.outlineVariant, width: 1),
+            border: Border.all(color: amber.withValues(alpha: 0.4)),
           ),
           child: Row(
             children: [
-              Icon(
-                Icons.notifications_off_rounded,
-                color: scheme.onSecondaryContainer,
-              ),
+              Icon(Icons.notifications_off_rounded, color: amber),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Text(
                   Strings.notificationsOff,
                   style: context.theme.textTheme.bodyLarge?.copyWith(
-                    color: scheme.onSecondaryContainer,
+                    color: amber,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -961,13 +1151,15 @@ class _OfflineNotice extends StatelessWidget {
         liveRegion: true,
         child: Container(
           padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.sm,
-            vertical: AppSpacing.xs,
+            horizontal: AppSpacing.md - 4,
+            vertical: AppSpacing.xs + 2,
           ),
           decoration: BoxDecoration(
             color: context.scheme.surfaceContainerHigh,
-            borderRadius: BorderRadius.all(Radius.circular(AppRadius.bubble)),
-            border: Border.all(color: context.scheme.outlineVariant, width: 1),
+            borderRadius: BorderRadius.all(Radius.circular(AppRadius.pill)),
+            border: Border.all(
+              color: context.scheme.outlineVariant.withValues(alpha: 0.5),
+            ),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -980,7 +1172,7 @@ class _OfflineNotice extends StatelessWidget {
               const SizedBox(width: AppSpacing.xs),
               Text(
                 Strings.connectionLost,
-                style: context.theme.textTheme.labelSmall?.copyWith(
+                style: context.theme.textTheme.labelMedium?.copyWith(
                   color: context.scheme.onSurfaceVariant,
                 ),
               ),

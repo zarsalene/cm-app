@@ -1,10 +1,11 @@
 import 'dart:async';
 
 import 'package:cm_app/api/cm_api.dart';
-import 'package:cm_app/app/channel_chip.dart';
+import 'package:cm_app/app/serene_widgets.dart';
 import 'package:cm_app/app/strings.dart';
 import 'package:cm_app/app/theme.dart';
 import 'package:cm_app/chat/chat_cubit.dart';
+import 'package:cm_app/chat/chat_strings.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -55,32 +56,39 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    final chat = context.select<ChatCubit, Chat?>((c) => c.state.chat);
+    final mode = context.select<ChatCubit, ChatMode?>(
+      (c) => c.state.chat?.mode,
+    );
     return Scaffold(
-      appBar: ChatAppBar(chat: chat),
+      appBar: _ChatAppBar(mode: mode),
       body: SafeArea(
-        child: chat == null ? const _Loading() : _Conversation(chat: chat),
+        child: mode == null ? const _Loading() : const _Conversation(),
       ),
     );
   }
 }
 
-class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
-  const ChatAppBar({required this.chat, super.key});
+final _rtlChar = RegExp(r'[֐-׿؀-ۿݐ-ݿࢠ-ࣿﭐ-﷿ﹰ-﻿]');
 
-  final Chat? chat;
+/// Right-to-left when [text] has any Arabic or Hebrew letter.
+TextDirection _directionOf(String text) =>
+    _rtlChar.hasMatch(text) ? TextDirection.rtl : TextDirection.ltr;
+
+class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
+  const _ChatAppBar({required this.mode});
+
+  final ChatMode? mode;
 
   @override
   Size get preferredSize => const Size.fromHeight(kToolbarHeight);
 
   @override
   Widget build(BuildContext context) {
-    final busy = context.select<ChatCubit, bool>(
-      (c) => c.state.sending || c.state.switching,
-    );
-    final switching = context.select<ChatCubit, bool>((c) => c.state.switching);
-    final resolvedName = chat?.customerName;
+    final scheme = context.scheme;
+    final text = context.theme.textTheme;
     return AppBar(
+      centerTitle: false,
+      scrolledUnderElevation: 0,
       // Opened from a push alert there is nothing to pop: go to the list.
       leading: IconButton(
         tooltip: Strings.back,
@@ -88,86 +96,41 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
         onPressed: () =>
             context.canPop() ? context.pop() : context.go('/inbox'),
       ),
-      title: Text(
-        chat == null
-            ? Strings.chatTitle
-            : Strings.customerLabel(
-                resolvedName,
-                chat!.senderId,
-                platform: chat!.platform,
-              ),
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        textDirection: _nameDirection(resolvedName ?? chat?.customerName),
-        textAlign: TextAlign.center,
-      ),
-      centerTitle: true,
-      actions: [
-        if (chat != null) ...[
-          Padding(
-            padding: const EdgeInsets.only(right: AppSpacing.sm),
-            child: ChannelChip(chat!.platform),
+      title: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            Strings.chatTitle,
+            style: text.titleMedium?.copyWith(fontWeight: FontWeight.w700),
           ),
-          IconButton(
-            tooltip: chat!.mode == ChatMode.human
-                ? Strings.activateBot
-                : Strings.takeOver,
-            icon: switching
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Icon(
-                    chat!.mode == ChatMode.human
-                        ? Icons.smart_toy_outlined
-                        : Icons.person_outline,
+          if (mode != null)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: mode == ChatMode.human
+                        ? scheme.primary
+                        : scheme.onSurfaceVariant,
+                    shape: BoxShape.circle,
                   ),
-            onPressed: busy
-                ? null
-                : () {
-                    if (chat!.mode == ChatMode.human) {
-                      _confirmGiveBack(context);
-                    } else {
-                      context.read<ChatCubit>().setAiMode(ChatMode.human);
-                    }
-                  },
-          ),
-          const SizedBox(width: AppSpacing.xs),
+                  child: const SizedBox.square(dimension: 6),
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                Text(
+                  mode == ChatMode.human
+                      ? ChatStrings.statusActive
+                      : ChatStrings.statusBot,
+                  style: text.labelSmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
         ],
-      ],
+      ),
     );
-  }
-
-  TextDirection _nameDirection(String? name) {
-    if (name == null || name.isEmpty) return TextDirection.ltr;
-    return _detectDirection(name);
-  }
-
-  void _confirmGiveBack(BuildContext context) {
-    final cubit = context.read<ChatCubit>();
-    final state = cubit.state;
-    final hasDraft = state.draft.trim().isNotEmpty;
-    showDialog<bool>(
-      context: context,
-      builder: (context) => _GiveBackDialog(hasDraft: hasDraft),
-    ).then((ok) {
-      if ((ok ?? false) && !cubit.isClosed) {
-        cubit.giveBack();
-      }
-    });
-  }
-
-  static TextDirection _detectDirection(String text) {
-    final rtlRegex = RegExp(
-      r'[\u0590-\u05FF\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]',
-    );
-    for (final char in text.characters) {
-      if (rtlRegex.hasMatch(char)) {
-        return TextDirection.rtl;
-      }
-    }
-    return TextDirection.ltr;
   }
 }
 
@@ -197,9 +160,7 @@ class _Loading extends StatelessWidget {
 }
 
 class _Conversation extends StatefulWidget {
-  const _Conversation({required this.chat});
-
-  final Chat chat;
+  const _Conversation();
 
   @override
   State<_Conversation> createState() => _ConversationState();
@@ -219,11 +180,13 @@ class _ConversationState extends State<_Conversation> {
 
   @override
   Widget build(BuildContext context) {
-    final chat = widget.chat;
+    // The page builds this only once a chat exists.
+    final chat = context.select<ChatCubit, Chat>((c) => c.state.chat!);
     final error = context.select<ChatCubit, String?>((c) => c.state.error);
 
     return Column(
       children: [
+        _CustomerHeader(chat: chat),
         if (chat.reason.trim().isNotEmpty)
           ConstrainedBox(
             constraints: BoxConstraints(
@@ -233,7 +196,7 @@ class _ConversationState extends State<_Conversation> {
               child: Semantics(
                 container: true,
                 child: _ReasonCard(
-                  chat: chat,
+                  reason: chat.reason,
                   expanded: _reasonExpanded,
                   onToggle: () =>
                       setState(() => _reasonExpanded = !_reasonExpanded),
@@ -248,11 +211,7 @@ class _ConversationState extends State<_Conversation> {
               horizontal: AppSpacing.pageGutter,
               vertical: AppSpacing.vertical8,
             ),
-            child: _InlineNotice(
-              tone: NoticeTone.error,
-              icon: Icons.error_outline,
-              text: error,
-            ),
+            child: _InlineNotice(icon: Icons.error_outline, text: error),
           ),
         if (chat.mode == ChatMode.human)
           BlocListener<ChatCubit, ChatState>(
@@ -260,11 +219,11 @@ class _ConversationState extends State<_Conversation> {
             listenWhen: (previous, current) =>
                 previous.draft.isNotEmpty && current.draft.isEmpty,
             listener: (_, __) => _reply.clear(),
-            child: _Composer(controller: _reply),
+            child: _Composer(controller: _reply, platform: chat.platform),
           )
-        else if (chat.mode == ChatMode.bot)
-          Padding(
-            padding: const EdgeInsets.all(AppSpacing.pageGutter),
+        else
+          const Padding(
+            padding: EdgeInsets.all(AppSpacing.pageGutter),
             child: _BotActiveCard(),
           ),
       ],
@@ -272,58 +231,129 @@ class _ConversationState extends State<_Conversation> {
   }
 }
 
-enum NoticeTone { info, warning, error }
+/// Who the customer is, on which channel, and the bot / human switch.
+class _CustomerHeader extends StatelessWidget {
+  const _CustomerHeader({required this.chat});
+
+  final Chat chat;
+
+  void _onHandoff(BuildContext context, ChatMode mode) {
+    final cubit = context.read<ChatCubit>();
+    if (mode == ChatMode.human) {
+      unawaited(cubit.setAiMode(ChatMode.human));
+      return;
+    }
+    final hasDraft = cubit.state.draft.trim().isNotEmpty;
+    unawaited(
+      showDialog<bool>(
+        context: context,
+        builder: (context) => _GiveBackDialog(hasDraft: hasDraft),
+      ).then((ok) {
+        if ((ok ?? false) && !cubit.isClosed) unawaited(cubit.giveBack());
+      }),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.scheme;
+    final text = context.theme.textTheme;
+    final busy = context.select<ChatCubit, bool>(
+      (c) => c.state.sending || c.state.switching,
+    );
+    final name = Strings.customerLabel(
+      chat.customerName,
+      chat.senderId,
+      platform: chat.platform,
+    );
+    return Material(
+      color: scheme.surfaceContainerLow,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.pageGutter,
+          vertical: AppSpacing.md - 4,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                InitialsAvatar(name: name, platform: chat.platform, size: 44),
+                const SizedBox(width: AppSpacing.md - 4),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        textDirection: _directionOf(chat.customerName ?? ''),
+                        style: text.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Text(
+                        ChatStrings.channelLine(chat.platform, chat.senderId),
+                        style: text.labelMedium?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Align(
+              alignment: AlignmentDirectional.centerEnd,
+              child: HandoffSwitch(
+                mode: chat.mode,
+                busy: busy,
+                onChanged: (mode) => _onHandoff(context, mode),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _InlineNotice extends StatelessWidget {
-  const _InlineNotice({
-    required this.tone,
-    required this.icon,
-    required this.text,
-  });
+  const _InlineNotice({required this.icon, required this.text});
 
-  final NoticeTone tone;
   final IconData icon;
   final String text;
 
   @override
   Widget build(BuildContext context) {
     final scheme = context.scheme;
-    final (bg, fg, iconColor) = switch (tone) {
-      NoticeTone.info => (
-        scheme.primaryContainer,
-        scheme.onPrimaryContainer,
-        scheme.primary,
-      ),
-      NoticeTone.warning => (
-        scheme.secondaryContainer,
-        scheme.onSecondaryContainer,
-        AppColors.alertAmber,
-      ),
-      NoticeTone.error => (
-        scheme.errorContainer,
-        scheme.onErrorContainer,
-        scheme.error,
-      ),
-    };
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
+    return DecoratedBox(
       decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.all(Radius.circular(AppRadius.card)),
-        border: Border.all(color: scheme.outlineVariant, width: 1),
+        color: scheme.error.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(AppRadius.card),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: iconColor, size: 20),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Text(
-              text,
-              style: context.theme.textTheme.bodyMedium?.copyWith(color: fg),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: scheme.error, size: 20),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Semantics(
+                liveRegion: true,
+                child: Text(
+                  text,
+                  style: context.theme.textTheme.bodyMedium?.copyWith(
+                    color: scheme.onSurface,
+                  ),
+                ),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -331,64 +361,73 @@ class _InlineNotice extends StatelessWidget {
 
 class _ReasonCard extends StatelessWidget {
   const _ReasonCard({
-    required this.chat,
+    required this.reason,
     required this.expanded,
     required this.onToggle,
   });
 
-  final Chat chat;
+  final String reason;
   final bool expanded;
   final VoidCallback onToggle;
 
   @override
   Widget build(BuildContext context) {
     final scheme = context.scheme;
+    final text = context.theme.textTheme;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.pageGutter),
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          color: scheme.secondaryContainer,
-          borderRadius: BorderRadius.all(Radius.circular(AppRadius.button)),
-          border: Border.all(color: scheme.outlineVariant, width: 1),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.pageGutter,
+        AppSpacing.sm,
+        AppSpacing.pageGutter,
+        0,
+      ),
+      child: ThreadCard(
+        stripe: context.amber,
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.md,
+          AppSpacing.sm,
+          AppSpacing.sm,
+          AppSpacing.sm,
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(Icons.flag_outlined, color: AppColors.alertAmber, size: 20),
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.sm),
+              child: Icon(Icons.flag_outlined, color: context.amber, size: 20),
+            ),
             const SizedBox(width: AppSpacing.sm),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        Strings.reasonCardLabel,
-                        style: context.theme.textTheme.labelLarge?.copyWith(
-                          color: scheme.onSecondaryContainer,
-                          fontWeight: FontWeight.w600,
-                        ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      Strings.reasonCardLabel,
+                      style: text.labelLarge?.copyWith(
+                        color: context.amber,
+                        fontWeight: FontWeight.w700,
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    chat.reason,
-                    maxLines: expanded ? null : 2,
-                    overflow: expanded ? null : TextOverflow.ellipsis,
-                    style: context.theme.textTheme.bodyMedium?.copyWith(
-                      color: scheme.onSecondaryContainer,
                     ),
-                  ),
-                ],
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      reason,
+                      maxLines: expanded ? null : 2,
+                      overflow: expanded ? null : TextOverflow.ellipsis,
+                      style: text.bodyMedium?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
             IconButton(
               icon: Icon(expanded ? Icons.expand_less : Icons.expand_more),
               onPressed: onToggle,
               tooltip: expanded ? Strings.collapse : Strings.expand,
-              color: scheme.onSecondaryContainer,
+              color: scheme.onSurfaceVariant,
             ),
           ],
         ),
@@ -453,10 +492,14 @@ class _MessageListState extends State<_MessageList> {
   }
 
   void _scrollToBottom() {
-    _controller.animateTo(
-      _controller.position.maxScrollExtent,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeOut,
+    unawaited(
+      _controller.animateTo(
+        _controller.position.maxScrollExtent,
+        duration: MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      ),
     );
     setState(() => _showScrollToBottom = false);
   }
@@ -481,16 +524,60 @@ class _MessageListState extends State<_MessageList> {
           ),
         ),
         if (_showScrollToBottom)
-          Positioned(
-            right: AppSpacing.pageGutter,
+          PositionedDirectional(
             bottom: AppSpacing.vertical12,
-            child: FloatingActionButton.small(
-              onPressed: _scrollToBottom,
-              tooltip: Strings.scrollToLatest,
-              child: const Icon(Icons.keyboard_arrow_down),
-            ),
+            start: 0,
+            end: 0,
+            child: Center(child: _LatestPill(onTap: _scrollToBottom)),
           ),
       ],
+    );
+  }
+}
+
+/// "Derniers messages" pill with a down arrow.
+class _LatestPill extends StatelessWidget {
+  const _LatestPill({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.scheme;
+    return Semantics(
+      button: true,
+      label: Strings.scrollToLatest,
+      excludeSemantics: true,
+      child: Material(
+        color: scheme.surfaceContainerHigh,
+        elevation: 4,
+        shape: StadiumBorder(
+          side: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.5)),
+        ),
+        child: InkWell(
+          customBorder: const StadiumBorder(),
+          onTap: onTap,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.arrow_downward, size: 18, color: scheme.primary),
+                  const SizedBox(width: AppSpacing.sm),
+                  Text(
+                    ChatStrings.latestMessages,
+                    style: context.theme.textTheme.labelLarge?.copyWith(
+                      color: scheme.onSurface,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -558,9 +645,11 @@ class _BubbleEntry extends StatelessWidget {
           ),
           child: _Bubble(
             message: message,
+            platform: chat?.platform ?? '',
             isCustomer: isCustomer,
             isBot: isBot,
             isCm: isCm,
+            showHeader: !groupedWithPrevious,
             lastOfGroup: lastOfGroup,
           ),
         ),
@@ -582,7 +671,7 @@ class _DayChip extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: scheme.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(AppRadius.chip),
+          borderRadius: BorderRadius.circular(AppRadius.pill),
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(
@@ -605,19 +694,24 @@ class _DayChip extends StatelessWidget {
 class _Bubble extends StatelessWidget {
   const _Bubble({
     required this.message,
+    required this.platform,
     required this.isCustomer,
     required this.isBot,
     required this.isCm,
+    required this.showHeader,
     required this.lastOfGroup,
   });
 
   final ChatMessage message;
+  final String platform;
   final bool isCustomer;
   final bool isBot;
   final bool isCm;
 
-  /// Only the last bubble of a run shows the sender label, the time and the
-  /// speech-bubble corner.
+  /// First bubble of a run: shows the sender label and the time above it.
+  final bool showHeader;
+
+  /// Last bubble of a run: gets the speech-bubble corner.
   final bool lastOfGroup;
 
   @override
@@ -625,36 +719,26 @@ class _Bubble extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = context.scheme;
     final text = isCustomer ? message.text : cleanMessageText(message.text);
-    final direction = _detectDirection(text);
     final at = message.at?.toLocal();
     final time = at == null
         ? null
         : '${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}';
 
+    final Color background;
     final Color foreground;
-    final Color? solid;
-    Gradient? gradient;
     if (isCustomer) {
-      solid = scheme.surfaceContainer;
+      background = scheme.surfaceContainerHigh;
       foreground = scheme.onSurface;
     } else if (isBot) {
-      solid = scheme.surfaceContainerHigh;
+      background = scheme.surfaceContainerLow;
       foreground = scheme.onSurfaceVariant;
     } else {
-      solid = null;
-      gradient = LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          scheme.primary,
-          Color.lerp(scheme.primary, AppColors.deepTeal, 0.35)!,
-        ],
-      );
-      foreground = scheme.onPrimary;
+      background = scheme.primaryContainer;
+      foreground = scheme.onPrimaryContainer;
     }
 
     // Speech-bubble corner on the sender's side, last bubble of a run only.
-    const big = Radius.circular(20);
+    const big = Radius.circular(AppRadius.bubble);
     const tail = Radius.circular(6);
     final radius = BorderRadius.only(
       topLeft: big,
@@ -663,42 +747,92 @@ class _Bubble extends StatelessWidget {
       bottomRight: !isCustomer && lastOfGroup ? tail : big,
     );
 
+    final (label, labelColor, labelIcon) = isCustomer
+        ? (ChatStrings.customerSender(platform), scheme.onSurfaceVariant, null)
+        : isBot
+        ? (ChatStrings.assistantBot, scheme.primary, Icons.smart_toy_outlined)
+        : (ChatStrings.you, scheme.primary, null);
+
     return Align(
-      alignment: isCustomer ? Alignment.centerLeft : Alignment.centerRight,
-      child: Semantics(
-        container: true,
-        label: text,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: MediaQuery.sizeOf(context).width * 0.82,
-          ),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: solid,
-              gradient: gradient,
-              borderRadius: radius,
-              border: isCustomer
-                  ? Border.all(color: scheme.outlineVariant, width: 1)
-                  : null,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
+      alignment: isCustomer
+          ? AlignmentDirectional.centerStart
+          : AlignmentDirectional.centerEnd,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.sizeOf(context).width * 0.85,
+        ),
+        child: Column(
+          crossAxisAlignment: isCustomer
+              ? CrossAxisAlignment.start
+              : CrossAxisAlignment.end,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (showHeader)
+              Padding(
+                padding: const EdgeInsets.only(
+                  bottom: AppSpacing.xs,
+                  left: AppSpacing.xs,
+                  right: AppSpacing.xs,
                 ),
-              ],
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.md,
-                vertical: AppSpacing.sm + 2,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (labelIcon != null) ...[
+                      Icon(labelIcon, size: 14, color: labelColor),
+                      const SizedBox(width: AppSpacing.xs),
+                    ],
+                    Flexible(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: labelColor,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    if (time != null) ...[
+                      const SizedBox(width: AppSpacing.sm),
+                      Text(
+                        time,
+                        textDirection: TextDirection.ltr,
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                    if (isCm) ...[
+                      const SizedBox(width: AppSpacing.xs),
+                      Icon(
+                        Icons.done_all_rounded,
+                        size: 14,
+                        color: scheme.primary,
+                      ),
+                    ],
+                  ],
+                ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Directionality(
-                    textDirection: direction,
+            Semantics(
+              container: true,
+              label: text,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: background,
+                  borderRadius: radius,
+                  border: isBot
+                      ? Border.all(
+                          color: scheme.outlineVariant.withValues(alpha: 0.5),
+                        )
+                      : null,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md,
+                    vertical: AppSpacing.sm + 2,
+                  ),
+                  child: Directionality(
+                    textDirection: _directionOf(text),
                     child: SelectableText(
                       text,
                       textAlign: TextAlign.start,
@@ -709,78 +843,21 @@ class _Bubble extends StatelessWidget {
                       showCursor: false,
                     ),
                   ),
-                  if (lastOfGroup && (isBot || time != null))
-                    Padding(
-                      padding: const EdgeInsets.only(top: AppSpacing.xs),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (isBot) ...[
-                            Icon(
-                              Icons.smart_toy_outlined,
-                              size: 13,
-                              color: foreground.withValues(alpha: 0.8),
-                            ),
-                            const SizedBox(width: AppSpacing.xs),
-                            Flexible(
-                              child: Text(
-                                Strings.bot,
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: foreground.withValues(alpha: 0.8),
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                            if (time != null)
-                              const SizedBox(width: AppSpacing.sm),
-                          ],
-                          if (time != null)
-                            Text(
-                              time,
-                              textDirection: TextDirection.ltr,
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: foreground.withValues(alpha: 0.75),
-                                fontSize: 11,
-                              ),
-                            ),
-                          if (isCm) ...[
-                            const SizedBox(width: AppSpacing.xs),
-                            Icon(
-                              Icons.done_all_rounded,
-                              size: 14,
-                              color: foreground.withValues(alpha: 0.85),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                ],
+                ),
               ),
             ),
-          ),
+          ],
         ),
       ),
     );
   }
-
-  static TextDirection _detectDirection(String text) {
-    final rtlRegex = RegExp(
-      r'[\u0590-\u05FF\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]',
-    );
-    if (text.isEmpty) return TextDirection.ltr;
-    for (final char in text.characters) {
-      if (rtlRegex.hasMatch(char)) {
-        return TextDirection.rtl;
-      }
-    }
-    return TextDirection.ltr;
-  }
 }
 
 class _Composer extends StatefulWidget {
-  const _Composer({required this.controller});
+  const _Composer({required this.controller, required this.platform});
 
   final TextEditingController controller;
+  final String platform;
 
   @override
   State<_Composer> createState() => _ComposerState();
@@ -790,7 +867,7 @@ class _ComposerState extends State<_Composer> {
   TextDirection _direction = TextDirection.ltr;
 
   void _onChanged(String value) {
-    final direction = _detectDirection(value);
+    final direction = _directionOf(value);
     if (direction != _direction) {
       setState(() => _direction = direction);
     }
@@ -798,130 +875,124 @@ class _ComposerState extends State<_Composer> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = context.scheme;
+    final sending = context.select<ChatCubit, bool>((c) => c.state.sending);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         _QuickReplies(controller: widget.controller),
-        _buildBar(context),
-      ],
-    );
-  }
-
-  Widget _buildBar(BuildContext context) {
-    final scheme = context.scheme;
-    final sending = context.select<ChatCubit, bool>((c) => c.state.sending);
-    return Container(
-      margin: const EdgeInsets.all(AppSpacing.pageGutter),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainer,
-        borderRadius: BorderRadius.all(Radius.circular(24)),
-        border: Border.all(color: scheme.outlineVariant, width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 16,
-            offset: const Offset(0, -4),
+        Container(
+          margin: const EdgeInsets.fromLTRB(
+            AppSpacing.pageGutter,
+            AppSpacing.sm,
+            AppSpacing.pageGutter,
+            AppSpacing.xs,
           ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.sm),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Expanded(
-              child: TextField(
-                controller: widget.controller,
-                readOnly: sending,
-                textDirection: _direction,
-                minLines: 1,
-                maxLines: 5,
-                maxLength: 2000,
-                buildCounter: (
-                  _, {
-                  required currentLength,
-                  required isFocused,
-                  required maxLength,
-                }) => null,
-                keyboardType: TextInputType.multiline,
-                textCapitalization: TextCapitalization.sentences,
-                decoration: InputDecoration(
-                  hintText: Strings.replyHint,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.all(
-                      Radius.circular(AppRadius.button),
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(
+              color: scheme.outlineVariant.withValues(alpha: 0.5),
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsetsDirectional.only(
+              start: AppSpacing.sm,
+              end: AppSpacing.xs,
+              top: AppSpacing.xs,
+              bottom: AppSpacing.xs,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: widget.controller,
+                    readOnly: sending,
+                    textDirection: _direction,
+                    minLines: 1,
+                    maxLines: 5,
+                    maxLength: 2000,
+                    buildCounter: (
+                      _, {
+                      required currentLength,
+                      required isFocused,
+                      required maxLength,
+                    }) => null,
+                    keyboardType: TextInputType.multiline,
+                    textCapitalization: TextCapitalization.sentences,
+                    decoration: const InputDecoration(
+                      hintText: Strings.replyHint,
+                      filled: false,
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: AppSpacing.md - 4,
+                        vertical: AppSpacing.md - 2,
+                      ),
                     ),
-                    borderSide: BorderSide.none,
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.all(
-                      Radius.circular(AppRadius.button),
-                    ),
-                    borderSide: BorderSide.none,
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.all(
-                      Radius.circular(AppRadius.button),
-                    ),
-                    borderSide: BorderSide(color: scheme.primary, width: 2),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.md,
-                    vertical: AppSpacing.md,
+                    onChanged: _onChanged,
                   ),
                 ),
-                onChanged: _onChanged,
-              ),
+                const SizedBox(width: AppSpacing.sm),
+                ValueListenableBuilder(
+                  valueListenable: widget.controller,
+                  builder: (context, value, _) => IconButton.filled(
+                    tooltip: Strings.send,
+                    style: IconButton.styleFrom(
+                      minimumSize: const Size.square(48),
+                      backgroundColor: scheme.primaryContainer,
+                      foregroundColor: scheme.onPrimaryContainer,
+                    ),
+                    onPressed: sending || value.text.trim().isEmpty
+                        ? null
+                        : () {
+                            unawaited(
+                              context.read<ChatCubit>().sendReply(value.text),
+                            );
+                            unawaited(HapticFeedback.lightImpact());
+                          },
+                    icon: sending
+                        ? SizedBox.square(
+                            dimension: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: scheme.onPrimaryContainer,
+                            ),
+                          )
+                        : const Icon(Icons.send, size: 20),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: AppSpacing.sm),
-            ValueListenableBuilder(
-              valueListenable: widget.controller,
-              builder: (context, value, _) => Container(
-                width: 48,
-                height: 48,
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DecoratedBox(
                 decoration: BoxDecoration(
                   color: scheme.primary,
                   shape: BoxShape.circle,
                 ),
-                child: IconButton(
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                  tooltip: Strings.send,
-                  onPressed: sending || value.text.trim().isEmpty
-                      ? null
-                      : () {
-                          context.read<ChatCubit>().sendReply(value.text);
-                          HapticFeedback.lightImpact();
-                        },
-                  icon: sending
-                      ? SizedBox.square(
-                          dimension: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: scheme.onPrimary,
-                          ),
-                        )
-                      : Icon(Icons.send, color: scheme.onPrimary, size: 20),
+                child: const SizedBox.square(dimension: 6),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Text(
+                ChatStrings.sendVia(widget.platform),
+                style: context.theme.textTheme.labelMedium?.copyWith(
+                  color: scheme.onSurfaceVariant,
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
+      ],
     );
-  }
-
-  static TextDirection _detectDirection(String text) {
-    final rtlRegex = RegExp(
-      r'[\u0590-\u05FF\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]',
-    );
-    if (text.isEmpty) return TextDirection.ltr;
-    for (final char in text.characters) {
-      if (rtlRegex.hasMatch(char)) {
-        return TextDirection.rtl;
-      }
-    }
-    return TextDirection.ltr;
   }
 }
 
@@ -934,26 +1005,23 @@ class _GiveBackDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = context.scheme;
     return Dialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.all(Radius.circular(AppRadius.dialog)),
-        side: BorderSide(color: scheme.outlineVariant, width: 1),
-      ),
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.innerCardPadding),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 56,
-              height: 56,
+            DecoratedBox(
               decoration: BoxDecoration(
-                color: scheme.secondaryContainer,
+                color: scheme.primaryContainer,
                 shape: BoxShape.circle,
               ),
-              child: Icon(
-                Icons.handshake_outlined,
-                size: 28,
-                color: scheme.onSecondaryContainer,
+              child: SizedBox.square(
+                dimension: 56,
+                child: Icon(
+                  Icons.smart_toy_outlined,
+                  size: 28,
+                  color: scheme.onPrimaryContainer,
+                ),
               ),
             ),
             const SizedBox(height: AppSpacing.vertical16),
@@ -1000,6 +1068,7 @@ class _GiveBackDialog extends StatelessWidget {
   }
 }
 
+/// Shown instead of the composer while the bot answers.
 class _BotActiveCard extends StatelessWidget {
   const _BotActiveCard();
 
@@ -1007,55 +1076,55 @@ class _BotActiveCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = context.scheme;
     final switching = context.select<ChatCubit, bool>((c) => c.state.switching);
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
+    return DecoratedBox(
       decoration: BoxDecoration(
-        color: scheme.primaryContainer,
-        borderRadius: BorderRadius.all(Radius.circular(AppRadius.card)),
-        border: Border.all(color: scheme.outlineVariant, width: 1),
+        color: scheme.surfaceContainer,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.5)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Icon(
-                Icons.smart_toy_outlined,
-                color: scheme.onPrimaryContainer,
-                size: 24,
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Text(
-                  Strings.botAnswersAgain,
-                  style: context.theme.textTheme.bodyMedium?.copyWith(
-                    color: scheme.onPrimaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.smart_toy_outlined, color: scheme.primary, size: 24),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    Strings.botAnswersAgain,
+                    style: context.theme.textTheme.bodyMedium?.copyWith(
+                      color: scheme.onSurface,
+                    ),
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          FilledButton.tonalIcon(
-            onPressed: switching
-                ? null
-                : () => context.read<ChatCubit>().setAiMode(ChatMode.human),
-            icon: switching
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.person_outline, size: 18),
-            label: const Text(Strings.takeOver),
-          ),
-        ],
+              ],
+            ),
+            const SizedBox(height: AppSpacing.md),
+            FilledButton.icon(
+              onPressed: switching
+                  ? null
+                  : () => unawaited(
+                      context.read<ChatCubit>().setAiMode(ChatMode.human),
+                    ),
+              icon: switching
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.person_outline, size: 18),
+              label: const Text(Strings.takeOver),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-/// Canned replies: a tap fills the composer. Shown while it is empty.
+/// Canned replies ("Macros"): a tap fills the composer. Shown while it is
+/// empty.
 class _QuickReplies extends StatelessWidget {
   const _QuickReplies({required this.controller});
 
@@ -1063,10 +1132,13 @@ class _QuickReplies extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = context.scheme;
     return ValueListenableBuilder<TextEditingValue>(
       valueListenable: controller,
       builder: (context, value, _) => AnimatedSize(
-        duration: const Duration(milliseconds: 200),
+        duration: MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 200),
         curve: Curves.easeOutCubic,
         alignment: Alignment.bottomCenter,
         child: value.text.isNotEmpty
@@ -1075,27 +1147,51 @@ class _QuickReplies extends StatelessWidget {
                 label: Strings.quickRepliesLabel,
                 container: true,
                 child: SizedBox(
-                  height: 44,
+                  height: 48,
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.symmetric(
                       horizontal: AppSpacing.pageGutter,
                     ),
-                    itemCount: Strings.quickReplies.length,
+                    itemCount: Strings.quickReplies.length + 1,
                     separatorBuilder: (_, _) =>
                         const SizedBox(width: AppSpacing.sm),
-                    itemBuilder: (context, i) => ActionChip(
-                      label: Text(Strings.quickReplies[i]),
-                      onPressed: () {
-                        controller.value = TextEditingValue(
-                          text: Strings.quickReplies[i],
-                          selection: TextSelection.collapsed(
-                            offset: Strings.quickReplies[i].length,
-                          ),
+                    itemBuilder: (context, i) {
+                      if (i == 0) {
+                        return Row(
+                          children: [
+                            Icon(Icons.bolt, size: 18, color: context.amber),
+                            const SizedBox(width: AppSpacing.xs),
+                            Text(
+                              '${ChatStrings.macros} :',
+                              style: context.theme.textTheme.labelLarge
+                                  ?.copyWith(color: scheme.onSurfaceVariant),
+                            ),
+                          ],
                         );
-                        HapticFeedback.selectionClick();
-                      },
-                    ),
+                      }
+                      final reply = Strings.quickReplies[i - 1];
+                      return ActionChip(
+                        // Capped: a long macro must not push the chip off screen.
+                        label: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 260),
+                          child: Text(
+                            reply,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        onPressed: () {
+                          controller.value = TextEditingValue(
+                            text: reply,
+                            selection: TextSelection.collapsed(
+                              offset: reply.length,
+                            ),
+                          );
+                          unawaited(HapticFeedback.selectionClick());
+                        },
+                      );
+                    },
                   ),
                 ),
               ),

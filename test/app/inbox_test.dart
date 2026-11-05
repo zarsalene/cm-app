@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:cm_app/api/cm_api.dart';
+import 'package:cm_app/app/serene_widgets.dart';
 import 'package:cm_app/app/strings.dart';
 import 'package:cm_app/inbox/inbox_cubit.dart';
+import 'package:cm_app/inbox/inbox_strings.dart';
 import 'package:cm_app/inbox/inbox_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -111,7 +113,7 @@ void main() {
     await tester.pumpWidget(_testWidget(cubit));
     await _settle(tester);
 
-    await tester.tap(find.text(Strings.sortOldestFirst));
+    await tester.tap(find.byTooltip(InboxStrings.sortTooltip));
     await _settle(tester);
 
     final alice = find.text('Alice Martin');
@@ -257,15 +259,16 @@ void main() {
     await tester.pumpWidget(_testWidget(cubit));
     await _settle(tester);
 
-    expect(find.text(Strings.botHandler), findsNWidgets(2));
+    expect(find.text('${Strings.botSection} (1)'), findsOneWidget);
+    expect(find.byType(WaitPill), findsNothing);
 
     await tester.tap(find.byTooltip(Strings.takeOver));
     await _settle(tester);
 
     verify(() => api.setAiMode('21650123456', 'whatsapp', ChatMode.human))
         .called(1);
-    expect(find.text(Strings.botHandler), findsOneWidget);
-    expect(find.text(Strings.humanHandler), findsNWidgets(2));
+    expect(find.text('${Strings.botSection} (1)'), findsNothing);
+    expect(find.byType(WaitPill), findsOneWidget);
     expect(find.text('${Strings.humanSection} (1)'), findsOneWidget);
   });
 

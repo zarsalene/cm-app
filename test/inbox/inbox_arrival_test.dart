@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cm_app/api/cm_api.dart';
+import 'package:cm_app/app/serene_widgets.dart';
 import 'package:cm_app/app/strings.dart';
 import 'package:cm_app/inbox/inbox_cubit.dart';
 import 'package:cm_app/inbox/inbox_page.dart';
@@ -60,7 +61,7 @@ void main() {
       ticks.add(null);
       await tester.settle();
       expect(find.text('Sana Ben Ali'), findsOneWidget);
-      expect(find.text('FB'), findsOneWidget);
+      expect(find.byType(ChannelBadge), findsOneWidget);
       expect(find.text('${Strings.humanSection} (1)'), findsOneWidget);
 
       await tester.tap(find.text('WhatsApp'));
@@ -68,6 +69,8 @@ void main() {
       expect(find.text('Sana Ben Ali'), findsNothing);
       expect(find.text(Strings.noResults), findsOneWidget);
 
+      // The channel row scrolls sideways: bring the chip into view first.
+      await tester.ensureVisible(find.text('Facebook'));
       await tester.tap(find.text('Facebook'));
       await tester.settle();
       expect(find.text('Sana Ben Ali'), findsOneWidget);

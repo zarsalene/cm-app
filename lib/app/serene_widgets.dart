@@ -276,21 +276,25 @@ class HandoffSwitch extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _Segment(
-              label: Strings.botAuto,
-              icon: Icons.smart_toy_outlined,
-              selected: mode == ChatMode.bot,
-              selectedColor: scheme.surfaceContainerHighest,
-              onSelectedColor: scheme.onSurface,
-              onTap: busy ? null : () => onChanged(ChatMode.bot),
+            Flexible(
+              child: _Segment(
+                label: Strings.botAuto,
+                icon: Icons.smart_toy_outlined,
+                selected: mode == ChatMode.bot,
+                selectedColor: scheme.surfaceContainerHighest,
+                onSelectedColor: scheme.onSurface,
+                onTap: busy ? null : () => onChanged(ChatMode.bot),
+              ),
             ),
-            _Segment(
-              label: Strings.youActive,
-              dotColor: context.amber,
-              selected: mode == ChatMode.human,
-              selectedColor: scheme.primaryContainer,
-              onSelectedColor: scheme.onPrimaryContainer,
-              onTap: busy ? null : () => onChanged(ChatMode.human),
+            Flexible(
+              child: _Segment(
+                label: Strings.youActive,
+                dotColor: context.amber,
+                selected: mode == ChatMode.human,
+                selectedColor: scheme.primaryContainer,
+                onSelectedColor: scheme.onPrimaryContainer,
+                onTap: busy ? null : () => onChanged(ChatMode.human),
+              ),
             ),
           ],
         ),
@@ -365,11 +369,17 @@ class _Segment extends StatelessWidget {
                     ),
                     const SizedBox(width: AppSpacing.xs + 2),
                   ],
-                  Text(
-                    label,
-                    style: context.theme.textTheme.labelLarge?.copyWith(
-                      color: foreground,
-                      fontWeight: FontWeight.w600,
+                  // Flexible: a narrow screen or a large text scale shrinks the
+                  // label instead of overflowing the pill.
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: context.theme.textTheme.labelLarge?.copyWith(
+                        color: foreground,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ],

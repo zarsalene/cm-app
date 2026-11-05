@@ -1,8 +1,11 @@
 import 'dart:async';
 
+import 'package:bloc_test/bloc_test.dart';
 import 'package:cm_app/api/cm_api.dart';
 import 'package:cm_app/app/dashboard_page.dart';
+import 'package:cm_app/app/dashboard_strings.dart';
 import 'package:cm_app/app/strings.dart';
+import 'package:cm_app/auth/auth_bloc.dart';
 import 'package:cm_app/core/theme_mode_service.dart';
 import 'package:cm_app/inbox/inbox_cubit.dart';
 import 'package:cm_app/push/push_service.dart';
@@ -16,6 +19,9 @@ class _MockCmApi extends Mock implements CmApi {}
 
 class _MockPushService extends Mock implements PushService {}
 
+class _MockAuthBloc extends MockBloc<AuthEvent, AuthState>
+    implements AuthBloc {}
+
 Future<void> _settle(WidgetTester tester) async {
   for (var i = 0; i < 10; i++) {
     await tester.pump(const Duration(milliseconds: 100));
@@ -28,6 +34,8 @@ void main() {
   });
 
   Widget testWidget(InboxCubit cubit) {
+    final auth = _MockAuthBloc();
+    when(() => auth.state).thenReturn(const Authenticated('Sarah'));
     return MultiRepositoryProvider(
       providers: [
         RepositoryProvider<ThemeModeService>(
@@ -37,9 +45,12 @@ void main() {
         ),
         RepositoryProvider<PushService>(create: (_) => _MockPushService()),
       ],
-      child: BlocProvider<InboxCubit>.value(
-        value: cubit,
-        child: const MaterialApp(home: DashboardPage()),
+      child: BlocProvider<AuthBloc>.value(
+        value: auth,
+        child: BlocProvider<InboxCubit>.value(
+          value: cubit,
+          child: const MaterialApp(home: DashboardPage()),
+        ),
       ),
     );
   }
@@ -91,16 +102,24 @@ void main() {
         ],
       );
 
+      // Tall phone screen: both cards sit below the stat tiles.
+      tester.view
+        ..physicalSize = const Size(1170, 4200)
+        ..devicePixelRatio = 3;
+      addTearDown(tester.view.reset);
+
       final cubit = InboxCubit(api, onUnauthorized: () {});
       unawaited(cubit.load());
 
       await tester.pumpWidget(testWidget(cubit));
       await _settle(tester);
 
-      expect(find.text(Strings.priorityQueue), findsOneWidget);
+      expect(find.text(DashboardStrings.priorityTitle), findsOneWidget);
 
-      final alice = find.text('Alice Martin');
-      final bob = find.text('Bob Durant');
+      // Names also show in "Activité récente" below: `.first` is the card of
+      // the priority queue, which comes first in the list.
+      final alice = find.text('Alice Martin').first;
+      final bob = find.text('Bob Durant').first;
       expect(alice, findsOneWidget);
       expect(bob, findsOneWidget);
 
@@ -141,7 +160,7 @@ void main() {
     await tester.pumpWidget(testWidget(cubit));
     await _settle(tester);
 
-    expect(find.text('Traitees aujourd hui'), findsOneWidget);
+    expect(find.text(DashboardStrings.handledToday), findsOneWidget);
   });
 
   testWidgets('Dashboard shows empty state when there is no conversation', (
@@ -189,6 +208,6 @@ void main() {
     await tester.pumpWidget(testWidget(cubit));
     await _settle(tester);
 
-    expect(find.text(Strings.botSection), findsOneWidget);
+    expect(find.text(DashboardStrings.byBot), findsOneWidget);
   });
 }

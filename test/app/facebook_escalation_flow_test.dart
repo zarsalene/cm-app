@@ -1,4 +1,5 @@
 import 'package:cm_app/api/cm_api.dart';
+import 'package:cm_app/app/serene_widgets.dart';
 import 'package:cm_app/app/splash_page.dart';
 import 'package:cm_app/app/strings.dart';
 import 'package:cm_app/app/view/app.dart';
@@ -103,11 +104,11 @@ void main() {
       await tester.tap(find.text('Voir les 1 à traiter'));
       await tester.settle();
       expect(find.text('Sana Ben Ali'), findsOneWidget);
-      expect(find.text('FB'), findsOneWidget);
+      expect(find.byType(ChannelBadge), findsOneWidget);
       expect(find.byTooltip('Se déconnecter'), findsNothing);
 
       // Back to the menu and forward again.
-      await tester.tap(find.byTooltip('Retour au menu'));
+      await tester.tap(find.text(Strings.navDashboard));
       await tester.settle();
       expect(find.text('Voir les 1 à traiter'), findsOneWidget);
       await tester.tap(find.text('Voir les 1 à traiter'));
@@ -117,7 +118,7 @@ void main() {
       await tester.tap(find.text('Sana Ben Ali'));
       await tester.settle();
       expect(find.text('Je veux un remboursement'), findsOneWidget);
-      expect(find.text('FB'), findsOneWidget);
+      expect(find.text('Facebook • …0001'), findsOneWidget);
 
       // A quick reply fills the composer.
       final quick = Strings.quickReplies.first;
@@ -133,7 +134,7 @@ void main() {
       verify(() => api.reply(_fbId, 'facebook', 'Bonjour Sana')).called(1);
 
       // Give the chat back to the bot.
-      await tester.tap(find.byTooltip('Activer le bot'));
+      await tester.tap(find.text(Strings.botAuto));
       await tester.settle();
       await tester.tap(find.text('Confirmer'));
       await tester.settle();

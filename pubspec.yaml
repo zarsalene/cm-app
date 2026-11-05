@@ -1,6 +1,6 @@
 name: cm_app
 description: CM mobile app
-version: 3.2.1+10
+version: 3.3.0+11
 publish_to: none
 
 environment:

@@ -52,7 +52,7 @@ void main() {
     await pumpChat('Leila');
     expect(find.text('Leila'), findsOneWidget);
     expect(find.textContaining('Réclamation livraison'), findsOneWidget);
-    expect(find.text('WA'), findsOneWidget);
+    expect(find.text('WhatsApp • …1234'), findsOneWidget);
 
     await pumpChat('');
     expect(find.text('Client WhatsApp …1234'), findsOneWidget);
@@ -92,8 +92,8 @@ void main() {
 
     // Facebook customer name should be visible in the header.
     expect(find.text('Sana Ben Ali'), findsOneWidget);
-    // Facebook channel badge should be visible.
-    expect(find.text('FB'), findsOneWidget);
+    // The Facebook channel line is visible, with the id tail only.
+    expect(find.text('Facebook • …0001'), findsOneWidget);
   });
 
   testWidgets('T11 ChatPage Facebook fallback includes platform name', (

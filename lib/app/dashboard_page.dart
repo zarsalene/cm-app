@@ -1,27 +1,50 @@
+import 'dart:async';
+
+import 'package:cm_app/api/models.dart';
 import 'package:cm_app/app/app_drawer.dart';
-import 'package:cm_app/app/channel_chip.dart';
+import 'package:cm_app/app/dashboard_strings.dart';
 import 'package:cm_app/app/motion_widgets.dart';
+import 'package:cm_app/app/serene_widgets.dart';
 import 'package:cm_app/app/strings.dart';
 import 'package:cm_app/app/theme.dart';
-import 'package:cm_app/api/models.dart';
+import 'package:cm_app/auth/auth_bloc.dart';
 import 'package:cm_app/inbox/inbox_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
-/// Premium dashboard: daily command center for community managers.
-/// Every button navigates to a real screen; nothing is a stub.
+/// Minutes after which an open conversation counts as "waiting too long" in
+/// the hero card. Client rule: the backend has no SLA field.
+const _warnAfterMinutes = 15;
+
+/// Minutes since the escalation (or last message), or null when unknown.
+int? _waitMinutes(Conversation c, DateTime now) {
+  final at = c.escalatedAt ?? c.lastSeen;
+  if (at == null) return null;
+  final minutes = now.difference(at).inMinutes;
+  return minutes < 0 ? 0 : minutes;
+}
+
+final _rtlChar = RegExp(r'[֐-׿؀-ۿݐ-ݿࢠ-ࣿﭐ-﷿ﹰ-﻿]');
+
+/// Direction of one piece of customer text: Arabic script reads right-to-left.
+TextDirection _directionOf(String text) =>
+    _rtlChar.hasMatch(text) ? TextDirection.rtl : TextDirection.ltr;
+
+void _openChat(BuildContext context, Conversation item) => unawaited(
+  context.push('/chat/${item.platform}/${Uri.encodeComponent(item.senderId)}'),
+);
+
+/// Daily command center for community managers: what waits, what the bot
+/// handles, and the shortest way to the next customer.
 class DashboardPage extends StatelessWidget {
   const DashboardPage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final isDark = theme.brightness == Brightness.dark;
-
     return BlocBuilder<InboxCubit, InboxState>(
       builder: (context, state) {
+        final now = DateTime.now();
         final openItems = state.conversations
             .where((i) => i.status == 'open')
             .toList();
@@ -31,11 +54,15 @@ class DashboardPage extends StatelessWidget {
         final closedItems = state.conversations
             .where((i) => i.status == 'closed')
             .toList();
-        final now = DateTime.now();
-        final under15 = openItems.where((i) {
-          final at = i.escalatedAt ?? i.lastSeen;
-          return at != null && now.difference(at).inMinutes < 15;
-        }).length;
+        final waits = openItems
+            .map((i) => _waitMinutes(i, now))
+            .whereType<int>()
+            .toList();
+        final over15 = waits.where((m) => m >= _warnAfterMinutes).length;
+        final under15 = waits.length - over15;
+        final averageWait = waits.isEmpty
+            ? 0
+            : (waits.reduce((a, b) => a + b) / waits.length).round();
         final handledToday = closedItems.where((i) {
           final d = i.escalatedAt ?? i.lastSeen;
           return d != null &&
@@ -52,58 +79,29 @@ class DashboardPage extends StatelessWidget {
               b.escalatedAt ?? b.sortAt,
             ),
           );
+        final anyUrgent = waits.any(
+          (m) => waitSeverity(m) == WaitSeverity.urgent,
+        );
 
         return Scaffold(
           drawer: const AppDrawer(),
-          appBar: AppBar(
-            title: Text(
-              Strings.dashboardTitle,
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            centerTitle: false,
-            elevation: 0,
-            backgroundColor: Colors.transparent,
-            foregroundColor: scheme.onSurface,
-            actions: [
-              SpinRefreshButton(
-                onPressed: () => context.read<InboxCubit>().load(),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              _ProfileAvatar(),
-            ],
+          appBar: BrandAppBar(notificationsOff: state.notificationsOff),
+          bottomNavigationBar: const AppNavBar(current: 0),
+          floatingActionButtonLocation:
+              FloatingActionButtonLocation.centerFloat,
+          floatingActionButton: openItems.isEmpty
+              ? null
+              : _TriageButton(count: openItems.length, urgent: anyUrgent),
+          body: _DashboardBody(
+            state: state,
+            openCount: openItems.length,
+            botCount: botItems.length,
+            over15: over15,
+            under15: under15,
+            averageWait: averageWait,
+            handledToday: handledToday,
+            priorityItems: priorityItems.take(5).toList(),
           ),
-          body: Container(
-            color: isDark ? AppColors.darkSurface : AppColors.lightSurfaceDim,
-            child: SafeArea(
-              child: _DashboardBody(
-                state: state,
-                openItems: openItems,
-                botItems: botItems,
-                closedItems: closedItems,
-                under15: under15,
-                handledToday: handledToday,
-                priorityItems: priorityItems,
-                theme: theme,
-                scheme: scheme,
-              ),
-            ),
-          ),
-          floatingActionButton: openItems.isNotEmpty
-              ? FloatingActionButton.extended(
-                  onPressed: () => context.go('/inbox'),
-                  icon: const Icon(Icons.list),
-                  label: Text('Voir les ${openItems.length} à traiter'),
-                  backgroundColor: scheme.primary,
-                  foregroundColor: scheme.onPrimary,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.all(
-                      Radius.circular(AppRadius.button),
-                    ),
-                  ),
-                )
-              : null,
         );
       },
     );
@@ -113,363 +111,184 @@ class DashboardPage extends StatelessWidget {
 class _DashboardBody extends StatelessWidget {
   const _DashboardBody({
     required this.state,
-    required this.openItems,
-    required this.botItems,
-    required this.closedItems,
+    required this.openCount,
+    required this.botCount,
+    required this.over15,
     required this.under15,
+    required this.averageWait,
     required this.handledToday,
     required this.priorityItems,
-    required this.theme,
-    required this.scheme,
   });
 
   final InboxState state;
-  final List<Conversation> openItems;
-  final List<Conversation> botItems;
-  final List<Conversation> closedItems;
+  final int openCount;
+  final int botCount;
+  final int over15;
   final int under15;
+  final int averageWait;
   final int handledToday;
   final List<Conversation> priorityItems;
-  final ThemeData theme;
-  final ColorScheme scheme;
 
   @override
   Widget build(BuildContext context) {
     if (state.loading && state.conversations.isEmpty) {
       return const _SkeletonDashboard();
     }
-
     if (state.error != null && state.conversations.isEmpty) {
       return _ErrorState(
-        theme: theme,
-        scheme: scheme,
         message: state.error!,
         onRetry: () => context.read<InboxCubit>().load(),
       );
     }
+    if (state.conversations.isEmpty) return const _EmptyDashboard();
 
-    if (state.conversations.isEmpty && state.error == null) {
-      return _EmptyDashboard();
-    }
+    final scheme = context.scheme;
+    final recent = List<Conversation>.from(state.conversations)
+      ..sort((a, b) => b.sortAt.compareTo(a.sortAt));
 
-    return CustomScrollView(
-      physics: const BouncingScrollPhysics(),
-      slivers: [
-        // Welcome + last refreshed
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.pageGutter,
-              AppSpacing.vertical12,
-              AppSpacing.pageGutter,
-              AppSpacing.vertical16,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    return RefreshIndicator(
+      onRefresh: () => context.read<InboxCubit>().load(),
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        // Bottom room: the floating triage button sits over the list.
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.pageGutter,
+          AppSpacing.sm,
+          AppSpacing.pageGutter,
+          96,
+        ),
+        children: [
+          _Greeting(total: state.conversations.length),
+          const SizedBox(height: AppSpacing.vertical16),
+          ThreadCard(
+            stripe: scheme.primary,
+            onTap: () => context.go('/inbox'),
+            child: _OpenHero(open: openCount, over15: over15),
+          ),
+          const SizedBox(height: AppSpacing.vertical12),
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  'Tableau de bord',
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: scheme.onSurface,
+                Expanded(
+                  child: _StatTile(
+                    title: DashboardStrings.byBot,
+                    value: botCount,
+                    unit: DashboardStrings.activeUnit,
+                    icon: Icons.smart_toy_outlined,
+                    color: scheme.primary,
                   ),
                 ),
-                const SizedBox(height: AppSpacing.xs),
-                Row(
-                  children: [
-                    LiveDot(color: scheme.primary),
-                    const SizedBox(width: AppSpacing.xs),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '${state.conversations.length} conversation'
-                            '${state.conversations.length > 1 ? 's' : ''} au total · '
-                            '${botItems.length} avec le bot · '
-                            '${Strings.liveLabel.toLowerCase()}',
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: scheme.onSurfaceVariant,
-                            ),
-                          ),
-                          if (state.conversations.isNotEmpty &&
-                              state.error == null)
-                            Text(
-                              'Dernière actualisation : il y a peu',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: scheme.onSurfaceVariant.withValues(
-                                  alpha: 0.6,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ],
+                const SizedBox(width: AppSpacing.vertical12),
+                Expanded(
+                  child: _StatTile(
+                    title: DashboardStrings.handledToday,
+                    value: handledToday,
+                    unit: DashboardStrings.conversationsUnit,
+                    icon: Icons.task_alt,
+                    color: context.amber,
+                  ),
                 ),
               ],
             ),
           ),
-        ),
-        // Stat cards
-        SliverPadding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.pageGutter,
-          ),
-          sliver: SliverToBoxAdapter(
-            child: _StatRow(
-              openCount: openItems.length,
-              botCount: botItems.length,
-              under15: under15,
-              total: state.conversations.length,
-              handledToday: handledToday,
-              theme: theme,
-              scheme: scheme,
+          const SizedBox(height: AppSpacing.vertical12),
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: _StatTile(
+                    title: DashboardStrings.averageWait,
+                    value: averageWait,
+                    unit: DashboardStrings.minuteUnit,
+                    icon: Icons.timer_outlined,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.vertical12),
+                Expanded(
+                  child: _StatTile(
+                    title: DashboardStrings.underFifteen,
+                    value: under15,
+                    unit: DashboardStrings.openUnit,
+                    icon: Icons.verified_outlined,
+                    color: scheme.primary,
+                  ),
+                ),
+              ],
             ),
           ),
-        ),
-        const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xl)),
-        // Priority queue: à traiter en priorité
-        if (openItems.isNotEmpty) ...[
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.pageGutter,
-            ),
-            sliver: SliverToBoxAdapter(
-              child: _SectionHeader(
-                theme: theme,
-                title: Strings.priorityQueue,
-                subtitle: Strings.priorityQueueSubtitle,
-                onViewAll: () => context.go('/inbox'),
+          if (priorityItems.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.xl),
+            _SectionHeader(
+              title: DashboardStrings.priorityTitle,
+              leading: Icon(Icons.priority_high, color: context.amber),
+              trailing: Text(
+                DashboardStrings.waitingOrder,
+                style: context.theme.textTheme.labelMedium?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
               ),
             ),
-          ),
-          const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.pageGutter,
-            ),
-            sliver: SliverToBoxAdapter(
-              child: _PriorityList(
-                items: priorityItems.take(5).toList(),
-                theme: theme,
-                scheme: scheme,
+            const SizedBox(height: AppSpacing.vertical12),
+            for (final item in priorityItems)
+              _PriorityCard(
+                item: item,
+                busy: state.toggling.contains(
+                  '${item.platform}/${item.senderId}',
+                ),
               ),
+          ],
+          const SizedBox(height: AppSpacing.vertical12),
+          _SectionHeader(
+            title: Strings.recentActivity,
+            trailing: TextButton(
+              onPressed: () => context.go('/inbox'),
+              child: const Text(DashboardStrings.viewAll),
             ),
           ),
-          const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xl)),
-        ],
-        // Quick actions (only real destinations)
-        SliverPadding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.pageGutter,
-          ),
-          sliver: SliverToBoxAdapter(
-            child: _SectionHeader(
-              theme: theme,
-              title: 'Actions',
-              subtitle: 'Gérer les conversations',
-            ),
-          ),
-        ),
-        const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),
-        SliverPadding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.pageGutter,
-          ),
-          sliver: SliverToBoxAdapter(
-            child: _QuickActions(onViewEscalations: () => context.go('/inbox')),
-          ),
-        ),
-        const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xl)),
-        // Recent activity (real items only)
-        if (state.conversations.isNotEmpty) ...[
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.pageGutter,
-            ),
-            sliver: SliverToBoxAdapter(
-              child: _SectionHeader(
-                theme: theme,
-                title: Strings.recentActivity,
-                subtitle: Strings.viewAll,
-                onViewAll: () => context.go('/inbox'),
-              ),
-            ),
-          ),
-          const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.pageGutter,
-            ),
-            sliver: SliverToBoxAdapter(
-              child: _RecentList(
-                items: state.conversations,
-                theme: theme,
-                scheme: scheme,
-              ),
-            ),
-          ),
-          const SliverToBoxAdapter(
-            child: SizedBox(
-              height: AppSpacing.vertical24 + AppSpacing.pageGutter,
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-class _SkeletonDashboard extends StatelessWidget {
-  const _SkeletonDashboard();
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = context.scheme;
-    return ListView(
-      padding: const EdgeInsets.all(AppSpacing.pageGutter),
-      children: [
-        Container(height: 24, width: 200, color: scheme.surfaceContainerHigh),
-        const SizedBox(height: AppSpacing.md),
-        Container(height: 80, color: scheme.surfaceContainerHigh),
-        const SizedBox(height: AppSpacing.xl),
-        ...List.generate(4, (i) => _SkeletonCard(scheme: scheme)),
-      ],
-    );
-  }
-}
-
-class _SkeletonCard extends StatelessWidget {
-  const _SkeletonCard({required this.scheme});
-
-  final ColorScheme scheme;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: AppSpacing.md),
-      height: 140,
-      color: scheme.surfaceContainerHigh,
-    );
-  }
-}
-
-class _EmptyDashboard extends StatelessWidget {
-  const _EmptyDashboard();
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = context.scheme;
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 96,
-            height: 96,
-            decoration: BoxDecoration(
-              color: scheme.primaryContainer,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.inbox_outlined,
-              size: 40,
-              color: scheme.onPrimaryContainer,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.vertical16),
-          Text(Strings.noConversations, style: themeTextStyle(context)),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            Strings.noConversationsBody,
-            style: context.theme.textTheme.bodyMedium?.copyWith(
-              color: scheme.onSurfaceVariant,
-            ),
-            textAlign: TextAlign.center,
-          ),
+          const SizedBox(height: AppSpacing.vertical12),
+          _RecentCard(items: recent.take(5).toList()),
         ],
       ),
     );
   }
 }
 
-TextStyle themeTextStyle(BuildContext context) {
-  return context.theme.textTheme.titleMedium?.copyWith(
-        fontWeight: FontWeight.w700,
-        color: context.scheme.onSurface,
-      ) ??
-      const TextStyle(fontWeight: FontWeight.w700);
-}
+class _Greeting extends StatelessWidget {
+  const _Greeting({required this.total});
 
-class _StatRow extends StatelessWidget {
-  const _StatRow({
-    required this.openCount,
-    required this.botCount,
-    required this.under15,
-    required this.total,
-    required this.handledToday,
-    required this.theme,
-    required this.scheme,
-  });
-
-  final int openCount;
-  final int botCount;
-  final int under15;
   final int total;
-  final int handledToday;
-  final ThemeData theme;
-  final ColorScheme scheme;
 
   @override
   Widget build(BuildContext context) {
+    final text = context.theme.textTheme;
+    final scheme = context.scheme;
+    final username = context.select<AuthBloc, String?>((b) {
+      final s = b.state;
+      return s is Authenticated ? s.username : null;
+    });
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: _StatCard(
-                title: Strings.openEscalations,
-                value: openCount,
-                delta: under15 > 0
-                    ? '$under15 urgente${under15 > 1 ? 's' : ''}'
-                    : 'Aucune urgente',
-                color: AppColors.alertAmber,
-                icon: Icons.error_outline,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: _StatCard(
-                title: Strings.botSection,
-                value: botCount,
-                delta: 'sans intervention',
-                color: scheme.primary,
-                icon: Icons.smart_toy_outlined,
-              ),
-            ),
-          ],
+        Text(
+          username == null
+              ? DashboardStrings.helloAnonymous
+              : DashboardStrings.hello(username),
+          style: text.headlineMedium?.copyWith(fontSize: 26),
         ),
-        const SizedBox(height: AppSpacing.md),
+        const SizedBox(height: AppSpacing.xs),
         Row(
           children: [
+            LiveDot(color: scheme.primary, size: 6),
+            const SizedBox(width: AppSpacing.xs),
             Expanded(
-              child: _StatCard(
-                title: 'Total',
-                value: total,
-                delta: 'conversations',
-                color: scheme.primary,
-                icon: Icons.list_alt,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: _StatCard(
-                title: 'Traitees aujourd hui',
-                value: handledToday,
-                delta: 'conversations',
-                color: scheme.primary,
-                icon: Icons.chat_bubble_outline,
+              child: Text(
+                DashboardStrings.totalLine(total),
+                style: text.bodyMedium?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
               ),
             ),
           ],
@@ -479,243 +298,152 @@ class _StatRow extends StatelessWidget {
   }
 }
 
-class _StatCard extends StatelessWidget {
-  const _StatCard({
-    required this.title,
-    required this.value,
-    required this.delta,
-    required this.color,
-    required this.icon,
-  });
+/// Animated number; static when the user turned animations off.
+class _Count extends StatelessWidget {
+  const _Count(this.value, {this.style});
 
-  final String title;
   final int value;
-  final String delta;
-  final Color color;
-  final IconData icon;
+  final TextStyle? style;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
     final still = MediaQuery.disableAnimationsOf(context);
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainer,
-        borderRadius: BorderRadius.all(Radius.circular(AppRadius.card)),
-        border: Border.all(
-          color: scheme.outlineVariant.withValues(alpha: 0.5),
-          width: 1,
-        ),
-        boxShadow: [AppShadow.card],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              shape: BoxShape.circle,
-            ),
-            child: Center(
-              child: TweenAnimationBuilder<double>(
-                tween: Tween(begin: still ? 1 : 0, end: 1),
-                duration: const Duration(milliseconds: 700),
-                curve: Curves.easeOutBack,
-                builder: (context, t, child) =>
-                    Transform.scale(scale: t, child: child),
-                child: Icon(icon, color: color, size: 18),
-              ),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          TweenAnimationBuilder<int>(
-            tween: IntTween(begin: still ? value : 0, end: value),
-            duration: still ? Duration.zero : const Duration(milliseconds: 900),
-            curve: Curves.easeOutCubic,
-            builder: (context, v, _) => Text(
-              '$v',
-              style: theme.textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w800,
-                color: scheme.onSurface,
-              ),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            title,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: scheme.onSurfaceVariant,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            delta,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: scheme.onSurfaceVariant.withValues(alpha: 0.7),
-            ),
-          ),
-        ],
-      ),
+    return TweenAnimationBuilder<int>(
+      tween: IntTween(begin: still ? value : 0, end: value),
+      duration: still ? Duration.zero : const Duration(milliseconds: 900),
+      curve: Curves.easeOutCubic,
+      builder: (context, v, _) => Text('$v', style: style),
     );
   }
 }
 
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({
-    required this.theme,
-    required this.title,
-    this.subtitle,
-    this.onViewAll,
-  });
+class _OpenHero extends StatelessWidget {
+  const _OpenHero({required this.open, required this.over15});
 
-  final ThemeData theme;
-  final String title;
-  final String? subtitle;
-  final VoidCallback? onViewAll;
+  final int open;
+  final int over15;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = theme.colorScheme;
+    final scheme = context.scheme;
+    final text = context.theme.textTheme;
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                title,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: scheme.onSurface,
+                DashboardStrings.openConversations,
+                style: text.labelLarge?.copyWith(
+                  color: scheme.onSurfaceVariant,
                 ),
               ),
-              if (subtitle != null) ...[
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  subtitle!,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
+              const SizedBox(height: AppSpacing.xs),
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.xs,
+                children: [
+                  _Count(
+                    open,
+                    style: text.headlineLarge?.copyWith(
+                      fontSize: 40,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ),
-              ],
+                  if (over15 > 0)
+                    StatusPill(
+                      label: DashboardStrings.overLimit(over15),
+                      color: context.amber,
+                    ),
+                ],
+              ),
             ],
           ),
         ),
-        if (onViewAll != null)
-          TextButton(
-            onPressed: onViewAll,
-            child: Text(
-              Strings.viewAll,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: scheme.primary,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+        const SizedBox(width: AppSpacing.md),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: scheme.primary.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(AppRadius.hero),
           ),
-      ],
-    );
-  }
-}
-
-class _QuickActions extends StatelessWidget {
-  const _QuickActions({required this.onViewEscalations});
-
-  final VoidCallback onViewEscalations;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    return GridView.count(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: 2,
-      mainAxisSpacing: AppSpacing.md,
-      crossAxisSpacing: AppSpacing.md,
-      childAspectRatio: 1.2,
-      children: [
-        _ActionTile(
-          icon: Icons.list_alt,
-          label: 'Boîte de réception',
-          color: scheme.primary,
-          glow: AppColors.lightPrimaryGlow,
-          onTap: onViewEscalations,
-        ),
-        _ActionTile(
-          icon: Icons.refresh,
-          label: 'Actualiser',
-          color: AppColors.alertAmber,
-          glow: AppColors.lightAmberGlow,
-          onTap: () => context.read<InboxCubit>().load(),
+          child: SizedBox.square(
+            dimension: 56,
+            child: Icon(Icons.inbox_outlined, color: scheme.primary, size: 28),
+          ),
         ),
       ],
     );
   }
 }
 
-class _ActionTile extends StatelessWidget {
-  const _ActionTile({
+class _StatTile extends StatelessWidget {
+  const _StatTile({
+    required this.title,
+    required this.value,
+    required this.unit,
     required this.icon,
-    required this.label,
     required this.color,
-    required this.glow,
-    required this.onTap,
   });
 
+  final String title;
+  final int value;
+  final String unit;
   final IconData icon;
-  final String label;
   final Color color;
-  final Color glow;
-  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.all(Radius.circular(AppRadius.card)),
-        child: Container(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          decoration: BoxDecoration(
-            color: scheme.surfaceContainer,
-            borderRadius: BorderRadius.all(Radius.circular(AppRadius.card)),
-            border: Border.all(
-              color: scheme.outlineVariant.withValues(alpha: 0.5),
-              width: 1,
-            ),
-            boxShadow: [AppShadow.card],
-          ),
+    final scheme = context.scheme;
+    final text = context.theme.textTheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainer,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        border: Border.all(
+          color: scheme.outlineVariant.withValues(alpha: 0.35),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.innerCardPadding),
+        child: MergeSemantics(
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: Center(child: Icon(icon, color: color, size: 22)),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: text.labelLarge?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Icon(icon, color: color, size: 22),
+                ],
               ),
-              const SizedBox(height: AppSpacing.md),
-              Text(
-                label,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: scheme.onSurface,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+              const SizedBox(height: AppSpacing.vertical16),
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.end,
+                spacing: AppSpacing.xs + 2,
+                children: [
+                  _Count(
+                    value,
+                    style: text.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Text(
+                    unit,
+                    style: text.labelMedium?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -725,50 +453,255 @@ class _ActionTile extends StatelessWidget {
   }
 }
 
-class _RecentList extends StatelessWidget {
-  const _RecentList({
-    required this.items,
-    required this.theme,
-    required this.scheme,
-  });
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({required this.title, this.leading, this.trailing});
 
-  final List<Conversation> items;
-  final ThemeData theme;
-  final ColorScheme scheme;
+  final String title;
+  final Widget? leading;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
-    final sorted = List<Conversation>.from(items)
-      ..sort((a, b) => b.sortAt.compareTo(a.sortAt));
-    final recent = sorted.take(5).toList();
+    return Row(
+      children: [
+        if (leading != null) ...[
+          leading!,
+          const SizedBox(width: AppSpacing.sm),
+        ],
+        Expanded(
+          child: Text(
+            title,
+            style: context.theme.textTheme.titleLarge?.copyWith(fontSize: 20),
+          ),
+        ),
+        if (trailing != null) trailing!,
+      ],
+    );
+  }
+}
 
-    return Column(
-      children: recent
-          .map(
-            (item) => Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.md),
-              child: _RecentRow(item: item, theme: theme, scheme: scheme),
+/// Solid channel label: "WhatsApp" green or "Facebook" blue.
+class _ChannelPill extends StatelessWidget {
+  const _ChannelPill(this.platform);
+
+  final String platform;
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, background, foreground) = switch (platform) {
+      'facebook' => (
+        Strings.facebook,
+        AppColors.facebook,
+        AppColors.onFacebook,
+      ),
+      'whatsapp' => (
+        Strings.whatsapp,
+        AppColors.whatsapp,
+        AppColors.onWhatsapp,
+      ),
+      _ => (
+        platform,
+        context.scheme.secondaryContainer,
+        context.scheme.onSecondaryContainer,
+      ),
+    };
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+        child: Text(
+          label,
+          style: context.theme.textTheme.labelMedium?.copyWith(
+            color: foreground,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PriorityCard extends StatelessWidget {
+  const _PriorityCard({required this.item, required this.busy});
+
+  final Conversation item;
+  final bool busy;
+
+  Future<void> _sendBack(BuildContext context) async {
+    final cubit = context.read<InboxCubit>();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text(Strings.giveBackTitle),
+        content: const Text(Strings.giveBackBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text(Strings.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text(Strings.confirm),
+          ),
+        ],
+      ),
+    );
+    if (ok == true && !cubit.isClosed) {
+      await cubit.setAiMode(item, ChatMode.bot);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.scheme;
+    final text = context.theme.textTheme;
+    final name = Strings.customerLabel(
+      item.customerName,
+      item.senderId,
+      platform: item.platform,
+    );
+    final minutes = _waitMinutes(item, DateTime.now());
+    final stripe =
+        minutes != null && waitSeverity(minutes) == WaitSeverity.urgent
+        ? context.urgent
+        : context.amber;
+    final detail = item.reason.trim().isNotEmpty
+        ? item.reason.trim()
+        : (item.lastMessage.trim().isNotEmpty
+              ? item.lastMessage.trim()
+              : Strings.noRecentMessage);
+    const compact = Size(0, 48);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.vertical12),
+      child: ThreadCard(
+        stripe: stripe,
+        onTap: () => _openChat(context, item),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                InitialsAvatar(name: name, platform: item.platform, size: 44),
+                const SizedBox(width: AppSpacing.vertical12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textDirection: _directionOf(name),
+                        style: text.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      _ChannelPill(item.platform),
+                    ],
+                  ),
+                ),
+                if (minutes != null) ...[
+                  const SizedBox(width: AppSpacing.sm),
+                  WaitPill(minutes: minutes),
+                ],
+              ],
             ),
-          )
-          .toList(),
+            const SizedBox(height: AppSpacing.vertical12),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: scheme.surfaceContainerLowest.withValues(alpha: 0.6),
+                borderRadius: BorderRadius.circular(AppRadius.button),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.vertical12),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: Text(
+                    '« $detail »',
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    textDirection: _directionOf(detail),
+                    style: text.bodyMedium,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.vertical12),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                FilledButton.icon(
+                  onPressed: () => _openChat(context, item),
+                  icon: const Icon(Icons.reply, size: 18),
+                  label: const Text(DashboardStrings.reply),
+                  style: FilledButton.styleFrom(
+                    minimumSize: compact,
+                    backgroundColor: scheme.primary,
+                    foregroundColor: scheme.onPrimary,
+                  ),
+                ),
+                FilledButton.icon(
+                  onPressed: busy ? null : () => unawaited(_sendBack(context)),
+                  icon: const Icon(Icons.smart_toy_outlined, size: 18),
+                  label: const Text(DashboardStrings.sendBackToBot),
+                  style: FilledButton.styleFrom(
+                    minimumSize: compact,
+                    backgroundColor: scheme.surfaceContainerHighest,
+                    foregroundColor: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RecentCard extends StatelessWidget {
+  const _RecentCard({required this.items});
+
+  final List<Conversation> items;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.scheme;
+    return Material(
+      color: scheme.surfaceContainer,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        side: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.35)),
+      ),
+      child: Column(
+        children: [
+          for (var i = 0; i < items.length; i++) ...[
+            if (i > 0) const Divider(height: 1, indent: 72),
+            _RecentRow(item: items[i]),
+          ],
+        ],
+      ),
     );
   }
 }
 
 class _RecentRow extends StatelessWidget {
-  const _RecentRow({
-    required this.item,
-    required this.theme,
-    required this.scheme,
-  });
+  const _RecentRow({required this.item});
 
   final Conversation item;
-  final ThemeData theme;
-  final ColorScheme scheme;
 
   @override
   Widget build(BuildContext context) {
-    final isOpen = item.status == 'open';
+    final scheme = context.scheme;
+    final text = context.theme.textTheme;
     final channel = item.platform == 'whatsapp'
         ? Strings.whatsapp
         : Strings.facebook;
@@ -781,359 +714,218 @@ class _RecentRow extends StatelessWidget {
     final time = at == null
         ? Strings.noRecentMessage
         : Strings.relativeTime(at);
-    final (statusLabel, statusColor) = switch (item.status) {
-      'open' => (Strings.humanHandler, AppColors.alertAmber),
-      'active' => (Strings.botHandler, scheme.primary),
-      _ => (Strings.closed, scheme.onSurfaceVariant),
+    final (statusLabel, statusColor, icon) = switch (item.status) {
+      'open' => (Strings.humanHandler, context.amber, Icons.priority_high),
+      'active' => (
+        Strings.botHandler,
+        scheme.primary,
+        Icons.smart_toy_outlined,
+      ),
+      _ => (Strings.closed, scheme.primary, Icons.task_alt),
     };
 
-    return Container(
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainer,
-        borderRadius: BorderRadius.all(Radius.circular(AppRadius.card)),
-        border: Border.all(
-          color: scheme.outlineVariant.withValues(alpha: 0.5),
-          width: 1,
-        ),
-      ),
-      child: ListTile(
-        leading: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            CircleAvatar(
-              radius: 22,
-              backgroundColor: scheme.primaryContainer,
-              child: Text(
-                Strings.initial(name),
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: scheme.onPrimaryContainer,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-            if (isOpen)
-              Positioned(
-                right: -4,
-                bottom: -4,
-                child: Container(
-                  width: 10,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    color: AppColors.alertAmber,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: scheme.surfaceContainer,
-                      width: 2,
-                    ),
-                  ),
-                ),
-              ),
-            Positioned(right: -4, top: -4, child: ChannelChip(item.platform)),
-          ],
-        ),
-        title: Text(
-          name,
-          style: theme.textTheme.bodyLarge?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: scheme.onSurface,
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        subtitle: Text(
-          '$channel \u00b7 $time',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: scheme.onSurfaceVariant,
-          ),
-        ),
-        trailing: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: statusColor.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: statusColor.withValues(alpha: 0.35),
-              width: 1,
-            ),
-          ),
-          child: Text(
-            statusLabel,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: statusColor,
-              fontWeight: FontWeight.w600,
-              fontSize: 10,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PriorityList extends StatelessWidget {
-  const _PriorityList({
-    required this.items,
-    required this.theme,
-    required this.scheme,
-  });
-
-  final List<Conversation> items;
-  final ThemeData theme;
-  final ColorScheme scheme;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: items.asMap().entries.map((entry) {
-        final index = entry.key;
-        final item = entry.value;
-        return _PriorityItem(
-          index: index,
-          item: item,
-          theme: theme,
-          scheme: scheme,
-        );
-      }).toList(),
-    );
-  }
-}
-
-class _PriorityItem extends StatelessWidget {
-  const _PriorityItem({
-    required this.index,
-    required this.item,
-    required this.theme,
-    required this.scheme,
-  });
-
-  final int index;
-  final Conversation item;
-  final ThemeData theme;
-  final ColorScheme scheme;
-
-  @override
-  Widget build(BuildContext context) {
-    final channel = item.platform == 'whatsapp'
-        ? Strings.whatsapp
-        : Strings.facebook;
-    final name = Strings.customerLabel(
-      item.customerName,
-      item.senderId,
-      platform: item.platform,
-    );
-    final at = item.escalatedAt ?? item.lastSeen;
-    final minutes = at == null ? null : DateTime.now().difference(at).inMinutes;
-    final timeLabel = minutes == null
-        ? Strings.noRecentMessage
-        : minutes < 60
-        ? 'il y a $minutes min'
-        : (minutes ~/ 60 < 24
-              ? 'il y a ${minutes ~/ 60} h'
-              : 'il y a ${minutes ~/ 60 ~/ 24} j');
-    final detail = item.reason.trim().isNotEmpty
-        ? item.reason.trim()
-        : (item.lastMessage.trim().isNotEmpty
-              ? item.lastMessage.trim()
-              : Strings.noRecentMessage);
-
     return InkWell(
-      onTap: () => context.push('/chat/${item.platform}/${item.senderId}'),
-      borderRadius: BorderRadius.all(Radius.circular(AppRadius.card)),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: AppSpacing.md),
-        decoration: BoxDecoration(
-          color: scheme.surfaceContainer,
-          borderRadius: BorderRadius.all(Radius.circular(AppRadius.card)),
-          border: Border.all(
-            color: scheme.outlineVariant.withValues(alpha: 0.5),
-            width: 1,
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  color: index == 0
-                      ? AppColors.alertAmber.withValues(alpha: 0.2)
-                      : scheme.surfaceContainerHigh,
-                  shape: BoxShape.circle,
-                ),
-                child: Center(
-                  child: Text(
-                    '${index + 1}',
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      color: index == 0
-                          ? AppColors.alertAmber
-                          : scheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
+      onTap: () => _openChat(context, item),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.innerCardPadding),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: statusColor.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
               ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            name,
-                            style: theme.textTheme.bodyLarge?.copyWith(
-                              fontWeight: FontWeight.w600,
-                              color: scheme.onSurface,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+              child: SizedBox.square(
+                dimension: 40,
+                child: Icon(icon, color: statusColor, size: 20),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.vertical12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textDirection: _directionOf(name),
+                          style: text.titleMedium?.copyWith(fontSize: 15),
                         ),
-                        const SizedBox(width: AppSpacing.xs),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.alertAmber.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          constraints: const BoxConstraints(
-                            minWidth: 0,
-                            minHeight: 0,
-                          ),
-                          child: Text(
-                            'Prioritaire',
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: AppColors.alertAmber,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 9,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          channel == Strings.whatsapp
-                              ? Icons.message
-                              : Icons.facebook,
-                          size: 14,
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Text(
+                        time,
+                        style: text.labelSmall?.copyWith(
                           color: scheme.onSurfaceVariant,
                         ),
-                        const SizedBox(width: AppSpacing.xs),
-                        Expanded(
-                          child: Text(
-                            '$channel \u00b7 $timeLabel',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: scheme.onSurfaceVariant,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      detail,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: scheme.onSurfaceVariant,
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '$statusLabel · $channel',
+                    style: text.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              Icon(Icons.chevron_right, color: scheme.primary),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _ErrorState extends StatelessWidget {
-  const _ErrorState({
-    required this.theme,
-    required this.scheme,
-    required this.message,
-    required this.onRetry,
-  });
+/// Floating pill to the inbox. The "Urgent" tag shows only when a customer
+/// has waited past [urgentWaitMinutes].
+class _TriageButton extends StatelessWidget {
+  const _TriageButton({required this.count, required this.urgent});
 
-  final ThemeData theme;
-  final ColorScheme scheme;
-  final String message;
-  final VoidCallback onRetry;
+  final int count;
+  final bool urgent;
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Column(
+    final scheme = context.scheme;
+    return FloatingActionButton.extended(
+      onPressed: () => context.go('/inbox'),
+      shape: const StadiumBorder(),
+      backgroundColor: scheme.primary,
+      foregroundColor: scheme.onPrimary,
+      icon: const Icon(Icons.flash_on),
+      label: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.error_outline, color: scheme.error, size: 64),
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            'Erreur',
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: scheme.onSurface,
+          Flexible(child: Text(DashboardStrings.triage(count))),
+          if (urgent) ...[
+            const SizedBox(width: AppSpacing.sm),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: scheme.secondary,
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                child: Text(
+                  DashboardStrings.urgent,
+                  style: context.theme.textTheme.labelSmall?.copyWith(
+                    color: scheme.onSecondary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
             ),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: scheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          FilledButton(onPressed: onRetry, child: const Text('Reessayer')),
+          ],
         ],
       ),
     );
   }
 }
 
-class _ProfileAvatar extends StatelessWidget {
-  const _ProfileAvatar();
+class _SkeletonDashboard extends StatelessWidget {
+  const _SkeletonDashboard();
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return GestureDetector(
-      onTap: () => Scaffold.of(context).openDrawer(),
-      child: Container(
-        margin: const EdgeInsets.only(right: AppSpacing.sm),
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-          color: scheme.primaryContainer,
-          shape: BoxShape.circle,
-          boxShadow: [AppShadow.card],
-        ),
-        child: Center(
-          child: Text(
-            'U',
-            style: TextStyle(
-              color: scheme.onPrimaryContainer,
-              fontWeight: FontWeight.w700,
-              fontSize: 14,
+    final scheme = context.scheme;
+    Widget block(double height, {double? width}) => DecoratedBox(
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+      ),
+      child: SizedBox(height: height, width: width ?? double.infinity),
+    );
+    return ListView(
+      padding: const EdgeInsets.all(AppSpacing.pageGutter),
+      children: [
+        block(28, width: 200),
+        const SizedBox(height: AppSpacing.md),
+        block(96),
+        const SizedBox(height: AppSpacing.vertical12),
+        block(110),
+        const SizedBox(height: AppSpacing.vertical12),
+        block(140),
+      ],
+    );
+  }
+}
+
+class _EmptyDashboard extends StatelessWidget {
+  const _EmptyDashboard();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.scheme;
+    final text = context.theme.textTheme;
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: scheme.primaryContainer,
+              shape: BoxShape.circle,
+            ),
+            child: SizedBox.square(
+              dimension: 96,
+              child: Icon(
+                Icons.inbox_outlined,
+                size: 40,
+                color: scheme.onPrimaryContainer,
+              ),
             ),
           ),
-        ),
+          const SizedBox(height: AppSpacing.vertical16),
+          Text(Strings.noConversations, style: text.titleMedium),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            Strings.noConversationsBody,
+            style: text.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ErrorState extends StatelessWidget {
+  const _ErrorState({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.scheme;
+    final text = context.theme.textTheme;
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.error_outline, color: scheme.error, size: 64),
+          const SizedBox(height: AppSpacing.md),
+          Text(DashboardStrings.errorTitle, style: text.titleLarge),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: text.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          FilledButton(
+            onPressed: onRetry,
+            style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
+            child: const Text(Strings.retry),
+          ),
+        ],
       ),
     );
   }
