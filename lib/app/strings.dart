@@ -2,8 +2,19 @@ import 'package:cm_app/api/cm_api.dart';
 
 /// All French UI copy for the escalation and chat screens.
 abstract class Strings {
-  static const escalationsTitle = 'Escalades';
-  static const noEscalations = 'Aucune escalade';
+  static const inboxTitle = 'Boîte de réception';
+  static const noConversations = 'Aucune conversation';
+  static const noConversationsBody =
+      'Les conversations WhatsApp et Facebook apparaîtront ici.';
+  static const humanSection = 'À traiter';
+  static const botSection = 'Bot actif';
+  static const closedConversations = 'Fermées';
+  static const takeOver = 'Prendre la main';
+  static const activateBot = 'Activer le bot';
+  static const humanHandler = 'Humain';
+  static const botHandler = 'Bot';
+  static const noRecentMessage = 'Aucun message récent';
+  static const allConversations = 'Toutes';
   static const noConnection = 'Pas de connexion';
   static const otherError = 'Erreur, réessayez';
   static const sendFailed = 'Envoi impossible';
@@ -136,8 +147,11 @@ abstract class Strings {
 
   /// Customer name, or `Client <channel> …<last 4 of senderId>` when unknown.
   /// [platform] is `facebook` or `whatsapp` — used for a better fallback label.
-  static String customerLabel(String? name, String senderId,
-      {String? platform}) {
+  static String customerLabel(
+    String? name,
+    String senderId, {
+    String? platform,
+  }) {
     final trimmed = name?.trim() ?? '';
     if (trimmed.isNotEmpty) return trimmed;
     final channel = switch (platform) {

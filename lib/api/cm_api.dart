@@ -88,6 +88,31 @@ class CmApi {
     ),
   );
 
+  /// Lists every known conversation, newest activity first.
+  Future<List<Conversation>> conversations() => _post('conversations').then(
+    (json) => _parse(
+      () => (json['items'] as List<dynamic>)
+          .map((e) => Conversation.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    ),
+  );
+
+  /// Switches the conversation between the bot and a human.
+  Future<ChatMode> setAiMode(String senderId, String platform, ChatMode mode) =>
+      _post('set_ai_mode', {
+        'sender_id': senderId,
+        'platform': platform,
+        'mode': mode.name,
+      }).then(
+        (json) => _parse(
+          () => switch (json['mode']) {
+            'human' => ChatMode.human,
+            'bot' => ChatMode.bot,
+            _ => throw const FormatException('Unknown mode'),
+          },
+        ),
+      );
+
   /// Loads one conversation.
   Future<Chat> chat(String senderId, String platform) => _post('chat', {
     'sender_id': senderId,

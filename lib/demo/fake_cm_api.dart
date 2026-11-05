@@ -67,6 +67,12 @@ class FakeCmApi implements CmApi {
 
   static const _delay = Duration(milliseconds: 250);
 
+  /// Known names for conversations that have no escalation row.
+  static const _names = <String, String>{
+    '1000000000010': 'Yassine Bouazizi',
+    '21699887766': 'Nour Ben Salah',
+  };
+
   late List<Escalation> _escalations;
   final _modes = <String, ChatMode>{};
   final _extra = <String, List<ChatMessage>>{};
@@ -77,6 +83,15 @@ class FakeCmApi implements CmApi {
 
   Future<T> _wait<T>(T Function() run) =>
       Future<void>.delayed(_delay).then((_) => run());
+
+  String _name(String senderId) => _names[senderId] ?? '';
+
+  String _lastMessage(String senderId, String platform) {
+    final extra = _extra[_key(senderId, platform)];
+    if (extra != null && extra.isNotEmpty) return extra.last.text;
+    final script = _script(senderId);
+    return script.isEmpty ? '' : script.last.text;
+  }
 
   @override
   Future<Session> login(String username, String password) => _wait(() {
@@ -95,17 +110,68 @@ class FakeCmApi implements CmApi {
       _wait(() => List.unmodifiable(_escalations));
 
   @override
+  Future<List<Conversation>> conversations() => _wait(() {
+    final now = DateTime.now();
+    final rows = <String, Conversation>{};
+    for (final e in _escalations) {
+      final key = _key(e.senderId, e.platform);
+      final mode =
+          _modes[key] ?? (e.status == 'open' ? ChatMode.human : ChatMode.bot);
+      final isOpen = e.status == 'open' && mode == ChatMode.human;
+      rows[key] = Conversation(
+        senderId: e.senderId,
+        platform: e.platform,
+        customerName: e.customerName ?? _name(e.senderId),
+        lastMessage: _lastMessage(e.senderId, e.platform),
+        lastSeen: e.escalatedAt,
+        mode: mode,
+        status: isOpen ? 'open' : (e.status == 'closed' ? 'closed' : 'active'),
+        reason: e.reason,
+        escalatedAt: e.escalatedAt,
+      );
+    }
+
+    // Bot conversations that never escalated: the toggle must work on them.
+    const botDemos = [
+      ('1000000000010', 'facebook', 6),
+      ('21699887766', 'whatsapp', 13),
+    ];
+    for (final (senderId, platform, minutes) in botDemos) {
+      final key = _key(senderId, platform);
+      if (rows.containsKey(key)) continue;
+      final mode = _modes[key] ?? ChatMode.bot;
+      rows[key] = Conversation(
+        senderId: senderId,
+        platform: platform,
+        customerName: _name(senderId),
+        lastMessage: _lastMessage(senderId, platform),
+        lastSeen: now.subtract(Duration(minutes: minutes)),
+        mode: mode,
+        status: mode == ChatMode.human ? 'open' : 'active',
+        reason: '',
+      );
+    }
+
+    return rows.values.toList()..sort((a, b) => b.sortAt.compareTo(a.sortAt));
+  });
+
+  @override
   Future<Chat> chat(String senderId, String platform) => _wait(() {
     final found = _escalations.where(
       (e) => e.senderId == senderId && e.platform == platform,
     );
     final key = _key(senderId, platform);
+    final defaultMode = found.isNotEmpty && found.first.status == 'open'
+        ? ChatMode.human
+        : ChatMode.bot;
     return Chat(
       senderId: senderId,
       platform: platform,
-      customerName: found.isEmpty ? null : found.first.customerName,
+      customerName: found.isEmpty
+          ? _name(senderId)
+          : found.first.customerName ?? _name(senderId),
       reason: found.isEmpty ? '' : found.first.reason,
-      mode: _modes[key] ?? ChatMode.human,
+      mode: _modes[key] ?? defaultMode,
       messages: [..._script(senderId), ...?_extra[key]],
     );
   });
@@ -122,23 +188,50 @@ class FakeCmApi implements CmApi {
       });
 
   @override
-  Future<void> giveBack(String senderId, String platform) => _wait(() {
-    _modes[_key(senderId, platform)] = ChatMode.bot;
-    _escalations = [
-      for (final e in _escalations)
-        if (e.senderId == senderId && e.platform == platform)
-          Escalation(
-            senderId: e.senderId,
-            platform: e.platform,
-            customerName: e.customerName,
-            reason: e.reason,
-            escalatedAt: e.escalatedAt,
-            status: 'closed',
-          )
-        else
-          e,
-    ];
-  });
+  Future<ChatMode> setAiMode(String senderId, String platform, ChatMode mode) =>
+      _wait(() {
+        final key = _key(senderId, platform);
+        _modes[key] = mode;
+        final exists = _escalations.any(
+          (e) => e.senderId == senderId && e.platform == platform,
+        );
+        if (!exists) {
+          if (mode == ChatMode.human) {
+            _escalations = [
+              Escalation(
+                senderId: senderId,
+                platform: platform,
+                customerName: _name(senderId),
+                reason: 'Prise en main manuelle',
+                escalatedAt: DateTime.now(),
+                status: 'open',
+              ),
+              ..._escalations,
+            ];
+          }
+        } else {
+          _escalations = [
+            for (final e in _escalations)
+              if (e.senderId == senderId && e.platform == platform)
+                Escalation(
+                  senderId: e.senderId,
+                  platform: e.platform,
+                  customerName: e.customerName ?? _name(senderId),
+                  reason: e.reason,
+                  escalatedAt: e.escalatedAt,
+                  status: mode == ChatMode.human ? 'open' : 'closed',
+                )
+              else
+                e,
+          ];
+        }
+        return mode;
+      });
+
+  @override
+  Future<void> giveBack(String senderId, String platform) async {
+    await setAiMode(senderId, platform, ChatMode.bot);
+  }
 
   @override
   Future<void> logout() => _wait(() {});

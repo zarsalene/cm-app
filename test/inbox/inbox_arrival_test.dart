@@ -1,8 +1,9 @@
 import 'dart:async';
 
 import 'package:cm_app/api/cm_api.dart';
-import 'package:cm_app/escalations/escalations_cubit.dart';
-import 'package:cm_app/escalations/escalations_page.dart';
+import 'package:cm_app/app/strings.dart';
+import 'package:cm_app/inbox/inbox_cubit.dart';
+import 'package:cm_app/inbox/inbox_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,7 +11,7 @@ import 'package:mocktail/mocktail.dart';
 
 import '../helpers/helpers.dart';
 
-class _MockCmApi extends Mock implements CmApi;
+class _MockCmApi extends Mock implements CmApi {}
 
 void main() {
   testWidgets(
@@ -25,31 +26,34 @@ void main() {
       final api = _MockCmApi();
       final ticks = StreamController<void>.broadcast();
       var botEscalated = false;
-      when(api.escalations).thenAnswer(
+      when(api.conversations).thenAnswer(
         (_) async => [
           if (botEscalated)
-            Escalation(
+            Conversation(
               senderId: '1000000000001',
               platform: 'facebook',
               customerName: 'Sana Ben Ali',
+              lastMessage: 'Je veux un humain',
+              lastSeen: DateTime.now(),
+              mode: ChatMode.human,
+              status: 'open',
               reason: 'AI decided to escalate (valid end token detected)',
               escalatedAt: DateTime.now(),
-              status: 'open',
             ),
         ],
       );
-      final cubit = EscalationsCubit(
+      final cubit = InboxCubit(
         api,
         onUnauthorized: () {},
         ticks: () => ticks.stream,
       );
 
       await tester.pumpApp(
-        BlocProvider.value(value: cubit, child: const EscalationsPage()),
+        BlocProvider.value(value: cubit, child: const InboxPage()),
       );
       unawaited(cubit.load());
       await tester.settle();
-      expect(find.text('Aucune escalade'), findsOneWidget);
+      expect(find.text(Strings.noConversations), findsOneWidget);
 
       // The bot escalates a Messenger conversation; the next poll shows it.
       botEscalated = true;
@@ -57,12 +61,12 @@ void main() {
       await tester.settle();
       expect(find.text('Sana Ben Ali'), findsOneWidget);
       expect(find.text('FB'), findsOneWidget);
-      expect(find.text('Ouvertes (1)'), findsOneWidget);
+      expect(find.text('${Strings.humanSection} (1)'), findsOneWidget);
 
       await tester.tap(find.text('WhatsApp'));
       await tester.settle();
       expect(find.text('Sana Ben Ali'), findsNothing);
-      expect(find.text('Aucun résultat'), findsOneWidget);
+      expect(find.text(Strings.noResults), findsOneWidget);
 
       await tester.tap(find.text('Facebook'));
       await tester.settle();
@@ -70,7 +74,7 @@ void main() {
 
       await tester.enterText(find.byType(TextField), 'zzz');
       await tester.settle();
-      expect(find.text('Aucun résultat'), findsOneWidget);
+      expect(find.text(Strings.noResults), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox());
       unawaited(cubit.close());

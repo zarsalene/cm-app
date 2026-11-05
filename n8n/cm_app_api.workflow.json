@@ -1,0 +1,3880 @@
+{
+  "updatedAt": "2026-11-05T10:38:05.162Z",
+  "createdAt": "2026-11-03T11:31:40.986Z",
+  "id": "t3q8R2tAXC1SfI1a",
+  "name": "CM App API",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "cm-app",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "72675be9-ff6a-5891-8214-2ccb834fc903",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        400
+      ],
+      "webhookId": "d8e2c8de-3b5b-5f36-9eaa-38ac963d4f7b"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "id": "Route_login",
+                    "leftValue": "={{ String($json.body?.action === 'login') }}",
+                    "rightValue": "true",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "login"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "id": "35a5beae-89de-59a2-93e2-cea9f1d06eab",
+      "name": "Route",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        220,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "action": "hash",
+        "type": "SHA256",
+        "value": "={{ String($json.body.username ?? '') + ':' + String($json.body.password ?? '') }}",
+        "dataPropertyName": "password_hash",
+        "encoding": "hex"
+      },
+      "id": "e5966c90-d272-59d8-9362-c73fad687f9a",
+      "name": "Hash password",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "qkaHDmKBqzLp7ezj"
+        },
+        "matchType": "allConditions",
+        "limit": 1,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "username",
+              "condition": "eq",
+              "keyValue": "={{ String($('Webhook').first().json.body.username ?? '') || '-' }}"
+            },
+            {
+              "keyName": "password_hash",
+              "condition": "eq",
+              "keyValue": "={{ $json.password_hash }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "11970895-2e15-5fbb-9844-d9912cf4c5fa",
+      "name": "Find user",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        0
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "Login OK?",
+              "leftValue": "={{ String(!!$json.username && $json.username === String($('Webhook').first().json.body.username) && $json.password_hash === $('Hash password').first().json.password_hash) }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "565e8c3e-dcf7-5ab4-9f5b-cdb94bd40a3a",
+      "name": "Login OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "action": "generate",
+        "dataPropertyName": "token",
+        "encodingType": "hex",
+        "stringLength": 48
+      },
+      "id": "8650a085-8baa-5059-b917-51bbf8fdca0b",
+      "name": "New token",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        1100,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "SOJ0ICbIQdsMOyJP"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "token": "={{ $json.token }}",
+            "username": "={{ $('Find user').first().json.username }}",
+            "expires_at": "={{ Date.now() + 2592000000 }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "51531c2a-9589-52f5-a70a-36dd5ee5ef78",
+      "name": "Save session",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1320,
+        -100
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ token: $('New token').first().json.token, username: $('Find user').first().json.username, expires_at: new Date(Number($json.expires_at) || Date.now() + 2592000000).toISOString() }) }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "id": "7b0ac797-c027-5650-91d1-db17f366d37e",
+      "name": "Login done",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1540,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: 'invalid_login' }) }}",
+        "options": {
+          "responseCode": 401,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "id": "bb29c298-0ed2-5de1-bcf1-1fb47e57405f",
+      "name": "Bad login",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1100,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "SOJ0ICbIQdsMOyJP"
+        },
+        "matchType": "allConditions",
+        "limit": 1,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "token",
+              "condition": "eq",
+              "keyValue": "={{ String($('Webhook').first().json.headers?.authorization || '').replace(/^Bearer\\s+/i, '').trim() || '-' }}"
+            },
+            {
+              "keyName": "expires_at",
+              "condition": "gt",
+              "keyValue": "={{ Date.now() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d10a93bb-5688-5fd8-ac05-bb79c44f3d3a",
+      "name": "Auth Gate",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        440,
+        400
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "Authorized?",
+              "leftValue": "={{ String(!!$json.token && $json.token === String($('Webhook').first().json.headers?.authorization || '').replace(/^Bearer\\s+/i, '').trim() && Number($json.expires_at) > Date.now()) }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ae3c5f22-10ea-5ff2-b106-41033ea9b3f4",
+      "name": "Authorized?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        660,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: 'unauthorized' }) }}",
+        "options": {
+          "responseCode": 401,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "id": "44388b8f-9354-5935-b3bf-de26d93fea9f",
+      "name": "Unauthorized",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        880,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "id": "Action_escalations",
+                    "leftValue": "={{ String($('Webhook').first().json.body.action === 'escalations') }}",
+                    "rightValue": "true",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "escalations"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "id": "Action_conversations",
+                    "leftValue": "={{ String($('Webhook').first().json.body.action === 'conversations') }}",
+                    "rightValue": "true",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "conversations"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "id": "Action_set_ai_mode",
+                    "leftValue": "={{ String($('Webhook').first().json.body.action === 'set_ai_mode' && (['facebook', 'whatsapp'].includes($('Webhook').first().json.body.platform) && /^\\d{5,32}$/.test(String($('Webhook').first().json.body.sender_id ?? '')) && ['bot', 'human'].includes($('Webhook').first().json.body.mode))) }}",
+                    "rightValue": "true",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "set_ai_mode"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "id": "Action_chat",
+                    "leftValue": "={{ String($('Webhook').first().json.body.action === 'chat' && (['facebook', 'whatsapp'].includes($('Webhook').first().json.body.platform) && /^\\d{5,32}$/.test(String($('Webhook').first().json.body.sender_id ?? '')))) }}",
+                    "rightValue": "true",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "chat"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "id": "Action_reply",
+                    "leftValue": "={{ String($('Webhook').first().json.body.action === 'reply' && (['facebook', 'whatsapp'].includes($('Webhook').first().json.body.platform) && /^\\d{5,32}$/.test(String($('Webhook').first().json.body.sender_id ?? ''))) && (typeof $('Webhook').first().json.body.text === 'string' && $('Webhook').first().json.body.text.trim().length >= 1 && $('Webhook').first().json.body.text.length <= 2000)) }}",
+                    "rightValue": "true",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "reply"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "id": "Action_give_back",
+                    "leftValue": "={{ String($('Webhook').first().json.body.action === 'give_back' && (['facebook', 'whatsapp'].includes($('Webhook').first().json.body.platform) && /^\\d{5,32}$/.test(String($('Webhook').first().json.body.sender_id ?? '')))) }}",
+                    "rightValue": "true",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "give_back"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "id": "Action_logout",
+                    "leftValue": "={{ String($('Webhook').first().json.body.action === 'logout') }}",
+                    "rightValue": "true",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "logout"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "id": "Action_bad_request",
+                    "leftValue": "={{ String(['chat', 'reply', 'give_back', 'set_ai_mode'].includes($('Webhook').first().json.body.action)) }}",
+                    "rightValue": "true",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "bad_request"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "id": "9a5403fe-8c9a-5469-837e-b45a4629b52c",
+      "name": "Action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        880,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: 'bad_request' }) }}",
+        "options": {
+          "responseCode": 400,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "id": "b2a6f536-133a-5733-874d-c8bbfcd54609",
+      "name": "Bad request",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1100,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: 'bad_action' }) }}",
+        "options": {
+          "responseCode": 400,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "id": "98af13cb-f420-505e-80af-eb533e3e6d9e",
+      "name": "Bad action",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1100,
+        1400
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "d4rAEGcJRHUxFFkS"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "3d61bcd4-bb3f-5687-8bc2-718a9845ac7b",
+      "name": "List escalations",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1100,
+        200
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Open first, newest first, max 50 (contract: escalations).\nconst rows = $input.all().map((i) => i.json).filter((r) => r && r.sender_id);\nrows.sort((a, b) => (a.status === 'open' ? 0 : 1) - (b.status === 'open' ? 0 : 1)\n  || String(b.escalated_at || '').localeCompare(String(a.escalated_at || '')));\nreturn [{ json: { items: rows.slice(0, 50).map((r) => ({ sender_id: String(r.sender_id), platform: r.platform,\n  customer_name: r.customer_name || '', reason: r.reason || '', escalated_at: r.escalated_at || '', status: r.status || 'open' })) } }];"
+      },
+      "id": "667bba7f-3f65-595e-8561-be8fd7e79e0f",
+      "name": "Sort escalations",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "id": "4d159a21-2a5b-55cc-8790-b8c795c294b6",
+      "name": "Escalations done",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1540,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "d4rAEGcJRHUxFFkS"
+        },
+        "matchType": "allConditions",
+        "returnAll": true,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "sender_id",
+              "condition": "eq",
+              "keyValue": "={{ String($('Webhook').first().json.body.sender_id) }}"
+            },
+            {
+              "keyName": "platform",
+              "condition": "eq",
+              "keyValue": "={{ $('Webhook').first().json.body.platform }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b7e6049c-6909-5966-9a7d-f2c921fa4eda",
+      "name": "Escalation Check",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1100,
+        700
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "Escalated?",
+              "leftValue": "={{ String(($json.ai_enabled != null) || $('Escalation Check').all().some((i) => i.json && i.json.sender_id != null && String(i.json.sender_id) === String($('Webhook').first().json.body.sender_id) && i.json.platform === $('Webhook').first().json.body.platform)) }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "1662da4a-7c11-5476-9983-7309e5087f22",
+      "name": "Escalated?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        700
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "id": "Target action_chat",
+                    "leftValue": "={{ String($('Webhook').first().json.body.action === 'chat') }}",
+                    "rightValue": "true",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "chat"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "id": "Target action_reply",
+                    "leftValue": "={{ String($('Webhook').first().json.body.action === 'reply') }}",
+                    "rightValue": "true",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "reply"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "id": "Target action_give_back",
+                    "leftValue": "={{ String($('Webhook').first().json.body.action === 'give_back') }}",
+                    "rightValue": "true",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "give_back"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "id": "d2a3dd00-d7e5-5703-96e8-f3f3a7521754",
+      "name": "Target action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        1540,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT t.*\nFROM (\n  SELECT m.*\n    FROM messages m\n    JOIN (SELECT c.id\n  FROM conversations c\n  JOIN chat_sessions s ON s.id = c.session_id\n WHERE s.platform_id = IF(SUBSTRING($1, 3) = 'whatsapp', 1, 2) AND s.session_id = SUBSTRING($2, 3) AND s.deleted_at IS NULL\n ORDER BY c.id\n LIMIT 1) conv ON conv.id = m.conversation_id\n   ORDER BY m.id DESC\n   LIMIT 100\n) t\nORDER BY t.id ASC",
+        "options": {
+          "queryReplacement": "={{ [ (v => v == null ? null : 's:' + v)($('Webhook').first().json.body.platform), (v => v == null ? null : 's:' + v)(String($('Webhook').first().json.body.sender_id)) ] }}"
+        }
+      },
+      "id": "709fec15-a6a5-5c94-8bfa-4ba2ecb074aa",
+      "name": "Load history",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        1760,
+        400
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "apLhSdbSQHjaIsZY",
+          "name": "BDMigration (WA sales bot)"
+        }
+      },
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT ai_enabled, label\nFROM sales_bot_user_ai_control\nWHERE sender_id = SUBSTRING($1, 3) AND platform = SUBSTRING($2, 3)\nLIMIT 1",
+        "options": {
+          "queryReplacement": "={{ [ (v => v == null ? null : 's:' + v)(String($('Webhook').first().json.body.sender_id)), (v => v == null ? null : 's:' + v)($('Webhook').first().json.body.platform) ] }}"
+        }
+      },
+      "id": "59064101-111d-56b8-9fad-1d3546178272",
+      "name": "Load AI control",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        1980,
+        400
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "apLhSdbSQHjaIsZY",
+          "name": "BDMigration (WA sales bot)"
+        }
+      },
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "jsCode": "// Contract: chat. History rows (oldest first) + bot mode from sales_bot_user_ai_control + latest escalation row.\nconst b = $('Webhook').first().json.body;\nconst msgs = $('Load history').all().map((i) => i.json).filter((r) => r && r.message != null);\nconst ctl = $('Load AI control').first().json;\nconst esc = $('Escalation Check').all().map((i) => i.json).filter((r) => r && r.sender_id)\n  .sort((x, y) => (x.status === 'open' ? 0 : 1) - (y.status === 'open' ? 0 : 1)\n    || String(y.escalated_at || '').localeCompare(String(x.escalated_at || '')))[0] || {};\nconst at = (r) => { const v = r.created_at ?? r.createdAt ?? null; if (v == null) return null; const d = new Date(v); return isNaN(d) ? null : d.toISOString(); };\nreturn [{ json: {\n  sender_id: String(b.sender_id), platform: b.platform,\n  customer_name: esc.customer_name || ctl.label || '', reason: esc.reason || '',\n  mode: ctl && ctl.ai_enabled != null && Number(ctl.ai_enabled) === 0 ? 'human' : 'bot',\n  messages: msgs.map((r) => ({ role: r.sender === 'bot' ? 'bot' : 'customer', text: String(r.message), at: at(r) })),\n} }];"
+      },
+      "id": "3f577c47-a4c9-50a1-b31e-9f3279477961",
+      "name": "Build chat",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "id": "59f0f1ff-8728-5a2f-9b75-31afa8d2c889",
+      "name": "Chat done",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2420,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "Facebook?",
+              "leftValue": "={{ String($('Webhook').first().json.body.platform === 'facebook') }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "3fce5cf7-5e77-59ce-9b11-c68b0e15b16f",
+      "name": "Facebook?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        650
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v25.0/me/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ recipient: { id: String($('Webhook').first().json.body.sender_id) }, messaging_type: 'RESPONSE', message: { text: $('Webhook').first().json.body.text } }) }}",
+        "options": {}
+      },
+      "id": "31dae0fc-5708-5857-83aa-3522d13301ec",
+      "name": "Send Messenger",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1980,
+        600
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "VGOLffdMEAJqakI9",
+          "name": "BotGenius page token"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "1140381445805651",
+        "recipientPhoneNumber": "={{ String($('Webhook').first().json.body.sender_id) }}",
+        "textBody": "={{ $('Webhook').first().json.body.text }}",
+        "additionalFields": {}
+      },
+      "id": "a1329328-5b21-5b07-80d3-be41f3a48dd3",
+      "name": "Send WhatsApp",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        1980,
+        760
+      ],
+      "credentials": {
+        "whatsAppApi": {
+          "id": "fJ0K4TzoEL3Pvbpq",
+          "name": "WhatsApp account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "webhookId": "a1329328-5b21-5b07-80d3-be41f3a48dd3"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO messages (conversation_id, sender, message)\nSELECT conv.id, 'bot', SUBSTRING($1, 3)\n  FROM (SELECT c.id\n  FROM conversations c\n  JOIN chat_sessions s ON s.id = c.session_id\n WHERE s.platform_id = IF(SUBSTRING($2, 3) = 'whatsapp', 1, 2) AND s.session_id = SUBSTRING($3, 3) AND s.deleted_at IS NULL\n ORDER BY c.id\n LIMIT 1) conv",
+        "options": {
+          "queryReplacement": "={{ [ (v => v == null ? null : 's:' + v)($('Webhook').first().json.body.text), (v => v == null ? null : 's:' + v)($('Webhook').first().json.body.platform), (v => v == null ? null : 's:' + v)(String($('Webhook').first().json.body.sender_id)) ] }}"
+        }
+      },
+      "id": "08aa618e-13e5-5987-b796-60efffe0e436",
+      "name": "Save reply",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        2200,
+        600
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "apLhSdbSQHjaIsZY",
+          "name": "BDMigration (WA sales bot)"
+        }
+      },
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true }) }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "id": "dad643a6-94bf-5c9d-86c6-f359341241d3",
+      "name": "Reply sent",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2420,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: 'send_failed', detail: String($json.error?.message ?? $json.error?.description ?? $json.error ?? 'send error').slice(0, 300) }) }}",
+        "options": {
+          "responseCode": 502,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "id": "8f89732b-d0c4-5d70-a9c5-54682dd93397",
+      "name": "Send failed",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2200,
+        820
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO sales_bot_user_ai_control (sender_id, platform, ai_enabled, disabled_by, escalated_at)\nVALUES (SUBSTRING($1, 3), SUBSTRING($2, 3), 1, NULL, NULL)\nON DUPLICATE KEY UPDATE ai_enabled = 1, disabled_by = NULL, escalated_at = NULL",
+        "options": {
+          "queryReplacement": "={{ [ (v => v == null ? null : 's:' + v)(String($('Webhook').first().json.body.sender_id)), (v => v == null ? null : 's:' + v)($('Webhook').first().json.body.platform) ] }}"
+        }
+      },
+      "id": "e2de2009-25e9-5d6b-b857-9dcd1628e174",
+      "name": "AI control on",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        1760,
+        1000
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "apLhSdbSQHjaIsZY",
+          "name": "BDMigration (WA sales bot)"
+        }
+      },
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "d4rAEGcJRHUxFFkS"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "sender_id",
+              "condition": "eq",
+              "keyValue": "={{ String($('Webhook').first().json.body.sender_id) }}"
+            },
+            {
+              "keyName": "platform",
+              "condition": "eq",
+              "keyValue": "={{ $('Webhook').first().json.body.platform }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status": "closed"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "baafd8c1-57e0-5c71-902c-147185b86c7c",
+      "name": "Close escalation",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1980,
+        1000
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, mode: 'bot' }) }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "id": "0c45e958-e2cf-5ee2-9437-b6bbbacf8e21",
+      "name": "Given back",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2200,
+        1000
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "deleteRows",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "SOJ0ICbIQdsMOyJP"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "token",
+              "condition": "eq",
+              "keyValue": "={{ String($('Webhook').first().json.headers?.authorization || '').replace(/^Bearer\\s+/i, '').trim() || '-' }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d7f9f833-8ac0-59d2-a1fe-fee255203460",
+      "name": "Delete session",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1100,
+        800
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true }) }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "id": "debedc60-3480-529e-ba15-5a6f605e63d4",
+      "name": "Logged out",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1320,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT sender_id, platform, ai_enabled, disabled_by, escalated_at, last_message, last_seen, label\nFROM sales_bot_user_ai_control\nORDER BY last_seen DESC\nLIMIT 200",
+        "options": {}
+      },
+      "id": "6160921c-86b6-4c11-9b83-b0445aefa802",
+      "name": "Conversations control",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        1100,
+        900
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "apLhSdbSQHjaIsZY",
+          "name": "BDMigration (WA sales bot)"
+        }
+      },
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "d4rAEGcJRHUxFFkS"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "2682ffca-187f-4a88-8130-0f7c6cbf71c6",
+      "name": "List conversations",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1320,
+        900
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Unified inbox: every known conversation + its latest escalation.\nconst ctl = $('Conversations control').all().map((i) => i.json).filter((r) => r && r.sender_id != null);\nconst esc = $input.all().map((i) => i.json).filter((r) => r && r.sender_id != null);\nconst key = (r) => String(r.platform) + '/' + String(r.sender_id);\nconst iso = (v) => {\n  if (v == null || v === '') return null;\n  const d = new Date(v);\n  return isNaN(d.getTime()) ? null : d.toISOString();\n};\nconst map = new Map();\n\nfor (const r of ctl) {\n  const platform = String(r.platform || '').toLowerCase();\n  if (!['facebook', 'whatsapp'].includes(platform)) continue;\n  const human = Number(r.ai_enabled) === 0;\n  map.set(key({ platform, sender_id: r.sender_id }), {\n    sender_id: String(r.sender_id),\n    platform,\n    customer_name: String(r.label || ''),\n    last_message: String(r.last_message || ''),\n    last_seen: iso(r.last_seen),\n    mode: human ? 'human' : 'bot',\n    status: human ? 'open' : 'active',\n    reason: '',\n    escalated_at: iso(r.escalated_at),\n  });\n}\n\nfor (const r of esc) {\n  const platform = String(r.platform || '').toLowerCase();\n  if (!['facebook', 'whatsapp'].includes(platform)) continue;\n  const k = key({ platform, sender_id: r.sender_id });\n  const cur = map.get(k) || {\n    sender_id: String(r.sender_id),\n    platform,\n    customer_name: '',\n    last_message: '',\n    last_seen: null,\n    mode: 'human',\n    status: 'open',\n    reason: '',\n    escalated_at: null,\n  };\n  cur.customer_name = String(r.customer_name || cur.customer_name || '');\n  cur.reason = String(r.reason || cur.reason || '');\n  cur.escalated_at = iso(r.escalated_at) || cur.escalated_at;\n  const status = String(r.status || 'open').toLowerCase();\n  if (status === 'open') {\n    cur.status = 'open';\n    cur.mode = 'human';\n  } else if (cur.mode !== 'human') {\n    cur.status = 'closed';\n  }\n  if (!cur.last_seen) cur.last_seen = cur.escalated_at;\n  map.set(k, cur);\n}\n\nconst items = [...map.values()]\n  .sort((a, b) => String(b.last_seen || b.escalated_at || '')\n    .localeCompare(String(a.last_seen || a.escalated_at || '')))\n  .slice(0, 200);\nreturn [{ json: { items } }];"
+      },
+      "id": "17d6bf31-0190-4dd3-8380-3409d1c6468b",
+      "name": "Build conversations",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        900
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "id": "f7acc1a2-ae6f-4892-bbfd-64876d805a98",
+      "name": "Conversations done",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1760,
+        900
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO sales_bot_user_ai_control (sender_id, platform, ai_enabled, disabled_by, escalated_at)\nVALUES (SUBSTRING($1, 3), SUBSTRING($2, 3), $3, IF($3 = 0, 'cm_app', NULL), IF($3 = 0, NOW(), NULL))\nON DUPLICATE KEY UPDATE\n  platform = VALUES(platform),\n  ai_enabled = VALUES(ai_enabled),\n  disabled_by = VALUES(disabled_by),\n  escalated_at = VALUES(escalated_at)",
+        "options": {
+          "queryReplacement": "={{ [ (v => v == null ? null : 's:' + v)(String($('Webhook').first().json.body.sender_id)), (v => v == null ? null : 's:' + v)($('Webhook').first().json.body.platform), $('Webhook').first().json.body.mode === 'human' ? 0 : 1 ] }}"
+        }
+      },
+      "id": "54673be8-defa-456b-b882-01bff2e7f47f",
+      "name": "Set AI mode",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        1100,
+        1050
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "apLhSdbSQHjaIsZY",
+          "name": "BDMigration (WA sales bot)"
+        }
+      },
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "Mode is bot?",
+              "leftValue": "={{ String($('Webhook').first().json.body.mode === 'bot') }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "36611221-4bcc-4e84-8629-a026c6f3fe1c",
+      "name": "Mode is bot?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        1050
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "d4rAEGcJRHUxFFkS"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "sender_id",
+              "condition": "eq",
+              "keyValue": "={{ String($('Webhook').first().json.body.sender_id) }}"
+            },
+            {
+              "keyName": "platform",
+              "condition": "eq",
+              "keyValue": "={{ $('Webhook').first().json.body.platform }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status": "closed"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "bf436882-0d44-4c7d-ad14-8b2f3affd16c",
+      "name": "Close escalation (AI)",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1540,
+        1050
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, mode: $('Webhook').first().json.body.mode, status: $('Webhook').first().json.body.mode === 'human' ? 'open' : 'active' }) }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "id": "ce2a7b46-a9e1-46d8-b12c-c1c8be8c3799",
+      "name": "AI mode done",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1760,
+        1050
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Route",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route": {
+      "main": [
+        [
+          {
+            "node": "Hash password",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Auth Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hash password": {
+      "main": [
+        [
+          {
+            "node": "Find user",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find user": {
+      "main": [
+        [
+          {
+            "node": "Login OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Login OK?": {
+      "main": [
+        [
+          {
+            "node": "New token",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Bad login",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "New token": {
+      "main": [
+        [
+          {
+            "node": "Save session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save session": {
+      "main": [
+        [
+          {
+            "node": "Login done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auth Gate": {
+      "main": [
+        [
+          {
+            "node": "Authorized?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Authorized?": {
+      "main": [
+        [
+          {
+            "node": "Action",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unauthorized",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Action": {
+      "main": [
+        [
+          {
+            "node": "List escalations",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Conversations control",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set AI mode",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Escalation Check",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Escalation Check",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Escalation Check",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Delete session",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Bad request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Bad action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Escalation Check": {
+      "main": [
+        [
+          {
+            "node": "Load AI control",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Escalated?": {
+      "main": [
+        [
+          {
+            "node": "Target action",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Bad request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Target action": {
+      "main": [
+        [
+          {
+            "node": "Load history",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Facebook?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI control on",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List escalations": {
+      "main": [
+        [
+          {
+            "node": "Sort escalations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sort escalations": {
+      "main": [
+        [
+          {
+            "node": "Escalations done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load history": {
+      "main": [
+        [
+          {
+            "node": "Build chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load AI control": {
+      "main": [
+        [
+          {
+            "node": "Escalated?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build chat": {
+      "main": [
+        [
+          {
+            "node": "Chat done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Facebook?": {
+      "main": [
+        [
+          {
+            "node": "Send Messenger",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Messenger": {
+      "main": [
+        [
+          {
+            "node": "Save reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Save reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save reply": {
+      "main": [
+        [
+          {
+            "node": "Reply sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI control on": {
+      "main": [
+        [
+          {
+            "node": "Close escalation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Close escalation": {
+      "main": [
+        [
+          {
+            "node": "Given back",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete session": {
+      "main": [
+        [
+          {
+            "node": "Logged out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Conversations control": {
+      "main": [
+        [
+          {
+            "node": "List conversations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List conversations": {
+      "main": [
+        [
+          {
+            "node": "Build conversations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build conversations": {
+      "main": [
+        [
+          {
+            "node": "Conversations done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set AI mode": {
+      "main": [
+        [
+          {
+            "node": "Mode is bot?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mode is bot?": {
+      "main": [
+        [
+          {
+            "node": "Close escalation (AI)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI mode done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Close escalation (AI)": {
+      "main": [
+        [
+          {
+            "node": "AI mode done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "none",
+    "saveManualExecutions": false,
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": null,
+  "versionId": "690b2254-644f-4a58-ac80-212b0f78fac5",
+  "activeVersionId": "690b2254-644f-4a58-ac80-212b0f78fac5",
+  "versionCounter": 11,
+  "triggerCount": 1,
+  "shared": [
+    {
+      "updatedAt": "2026-11-03T11:31:40.991Z",
+      "createdAt": "2026-11-03T11:31:40.991Z",
+      "role": "workflow:owner",
+      "workflowId": "t3q8R2tAXC1SfI1a",
+      "projectId": "hPxI7XNxt4FfvHaM",
+      "project": {
+        "updatedAt": "2026-03-29T19:48:53.063Z",
+        "createdAt": "2026-03-29T19:39:42.459Z",
+        "id": "hPxI7XNxt4FfvHaM",
+        "name": "Mahdi Gasmi <mouhamedmahdi11@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "58fced48-1d85-4035-a463-a67052027d86"
+      }
+    }
+  ],
+  "tags": [],
+  "activeVersion": {
+    "updatedAt": "2026-11-05T10:38:05.164Z",
+    "createdAt": "2026-11-05T10:38:05.164Z",
+    "versionId": "690b2254-644f-4a58-ac80-212b0f78fac5",
+    "workflowId": "t3q8R2tAXC1SfI1a",
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "cm-app",
+          "responseMode": "responseNode",
+          "options": {}
+        },
+        "id": "72675be9-ff6a-5891-8214-2ccb834fc903",
+        "name": "Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          0,
+          400
+        ],
+        "webhookId": "d8e2c8de-3b5b-5f36-9eaa-38ac963d4f7b"
+      },
+      {
+        "parameters": {
+          "rules": {
+            "values": [
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "loose"
+                  },
+                  "conditions": [
+                    {
+                      "id": "Route_login",
+                      "leftValue": "={{ String($json.body?.action === 'login') }}",
+                      "rightValue": "true",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "login"
+              }
+            ]
+          },
+          "options": {
+            "fallbackOutput": "extra"
+          }
+        },
+        "id": "35a5beae-89de-59a2-93e2-cea9f1d06eab",
+        "name": "Route",
+        "type": "n8n-nodes-base.switch",
+        "typeVersion": 3,
+        "position": [
+          220,
+          400
+        ]
+      },
+      {
+        "parameters": {
+          "action": "hash",
+          "type": "SHA256",
+          "value": "={{ String($json.body.username ?? '') + ':' + String($json.body.password ?? '') }}",
+          "dataPropertyName": "password_hash",
+          "encoding": "hex"
+        },
+        "id": "e5966c90-d272-59d8-9362-c73fad687f9a",
+        "name": "Hash password",
+        "type": "n8n-nodes-base.crypto",
+        "typeVersion": 1,
+        "position": [
+          440,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "qkaHDmKBqzLp7ezj"
+          },
+          "matchType": "allConditions",
+          "limit": 1,
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "username",
+                "condition": "eq",
+                "keyValue": "={{ String($('Webhook').first().json.body.username ?? '') || '-' }}"
+              },
+              {
+                "keyName": "password_hash",
+                "condition": "eq",
+                "keyValue": "={{ $json.password_hash }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "11970895-2e15-5fbb-9844-d9912cf4c5fa",
+        "name": "Find user",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          660,
+          0
+        ],
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose"
+            },
+            "conditions": [
+              {
+                "id": "Login OK?",
+                "leftValue": "={{ String(!!$json.username && $json.username === String($('Webhook').first().json.body.username) && $json.password_hash === $('Hash password').first().json.password_hash) }}",
+                "rightValue": "true",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "565e8c3e-dcf7-5ab4-9f5b-cdb94bd40a3a",
+        "name": "Login OK?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          880,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "action": "generate",
+          "dataPropertyName": "token",
+          "encodingType": "hex",
+          "stringLength": 48
+        },
+        "id": "8650a085-8baa-5059-b917-51bbf8fdca0b",
+        "name": "New token",
+        "type": "n8n-nodes-base.crypto",
+        "typeVersion": 1,
+        "position": [
+          1100,
+          -100
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "insert",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "SOJ0ICbIQdsMOyJP"
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "token": "={{ $json.token }}",
+              "username": "={{ $('Find user').first().json.username }}",
+              "expires_at": "={{ Date.now() + 2592000000 }}"
+            },
+            "matchingColumns": [],
+            "schema": []
+          },
+          "options": {}
+        },
+        "id": "51531c2a-9589-52f5-a70a-36dd5ee5ef78",
+        "name": "Save session",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1320,
+          -100
+        ],
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({ token: $('New token').first().json.token, username: $('Find user').first().json.username, expires_at: new Date(Number($json.expires_at) || Date.now() + 2592000000).toISOString() }) }}",
+          "options": {
+            "responseCode": 200,
+            "responseHeaders": {
+              "entries": [
+                {
+                  "name": "Cache-Control",
+                  "value": "no-store"
+                }
+              ]
+            }
+          }
+        },
+        "id": "7b0ac797-c027-5650-91d1-db17f366d37e",
+        "name": "Login done",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          1540,
+          -100
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({ error: 'invalid_login' }) }}",
+          "options": {
+            "responseCode": 401,
+            "responseHeaders": {
+              "entries": [
+                {
+                  "name": "Cache-Control",
+                  "value": "no-store"
+                }
+              ]
+            }
+          }
+        },
+        "id": "bb29c298-0ed2-5de1-bcf1-1fb47e57405f",
+        "name": "Bad login",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          1100,
+          100
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "SOJ0ICbIQdsMOyJP"
+          },
+          "matchType": "allConditions",
+          "limit": 1,
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "token",
+                "condition": "eq",
+                "keyValue": "={{ String($('Webhook').first().json.headers?.authorization || '').replace(/^Bearer\\s+/i, '').trim() || '-' }}"
+              },
+              {
+                "keyName": "expires_at",
+                "condition": "gt",
+                "keyValue": "={{ Date.now() }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "d10a93bb-5688-5fd8-ac05-bb79c44f3d3a",
+        "name": "Auth Gate",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          440,
+          400
+        ],
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose"
+            },
+            "conditions": [
+              {
+                "id": "Authorized?",
+                "leftValue": "={{ String(!!$json.token && $json.token === String($('Webhook').first().json.headers?.authorization || '').replace(/^Bearer\\s+/i, '').trim() && Number($json.expires_at) > Date.now()) }}",
+                "rightValue": "true",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "ae3c5f22-10ea-5ff2-b106-41033ea9b3f4",
+        "name": "Authorized?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          660,
+          400
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({ error: 'unauthorized' }) }}",
+          "options": {
+            "responseCode": 401,
+            "responseHeaders": {
+              "entries": [
+                {
+                  "name": "Cache-Control",
+                  "value": "no-store"
+                }
+              ]
+            }
+          }
+        },
+        "id": "44388b8f-9354-5935-b3bf-de26d93fea9f",
+        "name": "Unauthorized",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          880,
+          600
+        ]
+      },
+      {
+        "parameters": {
+          "rules": {
+            "values": [
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "loose"
+                  },
+                  "conditions": [
+                    {
+                      "id": "Action_escalations",
+                      "leftValue": "={{ String($('Webhook').first().json.body.action === 'escalations') }}",
+                      "rightValue": "true",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "escalations"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "loose"
+                  },
+                  "conditions": [
+                    {
+                      "id": "Action_conversations",
+                      "leftValue": "={{ String($('Webhook').first().json.body.action === 'conversations') }}",
+                      "rightValue": "true",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "conversations"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "loose"
+                  },
+                  "conditions": [
+                    {
+                      "id": "Action_set_ai_mode",
+                      "leftValue": "={{ String($('Webhook').first().json.body.action === 'set_ai_mode' && (['facebook', 'whatsapp'].includes($('Webhook').first().json.body.platform) && /^\\d{5,32}$/.test(String($('Webhook').first().json.body.sender_id ?? '')) && ['bot', 'human'].includes($('Webhook').first().json.body.mode))) }}",
+                      "rightValue": "true",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "set_ai_mode"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "loose"
+                  },
+                  "conditions": [
+                    {
+                      "id": "Action_chat",
+                      "leftValue": "={{ String($('Webhook').first().json.body.action === 'chat' && (['facebook', 'whatsapp'].includes($('Webhook').first().json.body.platform) && /^\\d{5,32}$/.test(String($('Webhook').first().json.body.sender_id ?? '')))) }}",
+                      "rightValue": "true",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "chat"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "loose"
+                  },
+                  "conditions": [
+                    {
+                      "id": "Action_reply",
+                      "leftValue": "={{ String($('Webhook').first().json.body.action === 'reply' && (['facebook', 'whatsapp'].includes($('Webhook').first().json.body.platform) && /^\\d{5,32}$/.test(String($('Webhook').first().json.body.sender_id ?? ''))) && (typeof $('Webhook').first().json.body.text === 'string' && $('Webhook').first().json.body.text.trim().length >= 1 && $('Webhook').first().json.body.text.length <= 2000)) }}",
+                      "rightValue": "true",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "reply"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "loose"
+                  },
+                  "conditions": [
+                    {
+                      "id": "Action_give_back",
+                      "leftValue": "={{ String($('Webhook').first().json.body.action === 'give_back' && (['facebook', 'whatsapp'].includes($('Webhook').first().json.body.platform) && /^\\d{5,32}$/.test(String($('Webhook').first().json.body.sender_id ?? '')))) }}",
+                      "rightValue": "true",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "give_back"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "loose"
+                  },
+                  "conditions": [
+                    {
+                      "id": "Action_logout",
+                      "leftValue": "={{ String($('Webhook').first().json.body.action === 'logout') }}",
+                      "rightValue": "true",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "logout"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "loose"
+                  },
+                  "conditions": [
+                    {
+                      "id": "Action_bad_request",
+                      "leftValue": "={{ String(['chat', 'reply', 'give_back', 'set_ai_mode'].includes($('Webhook').first().json.body.action)) }}",
+                      "rightValue": "true",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "bad_request"
+              }
+            ]
+          },
+          "options": {
+            "fallbackOutput": "extra"
+          }
+        },
+        "id": "9a5403fe-8c9a-5469-837e-b45a4629b52c",
+        "name": "Action",
+        "type": "n8n-nodes-base.switch",
+        "typeVersion": 3,
+        "position": [
+          880,
+          400
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({ error: 'bad_request' }) }}",
+          "options": {
+            "responseCode": 400,
+            "responseHeaders": {
+              "entries": [
+                {
+                  "name": "Cache-Control",
+                  "value": "no-store"
+                }
+              ]
+            }
+          }
+        },
+        "id": "b2a6f536-133a-5733-874d-c8bbfcd54609",
+        "name": "Bad request",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          1100,
+          1200
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({ error: 'bad_action' }) }}",
+          "options": {
+            "responseCode": 400,
+            "responseHeaders": {
+              "entries": [
+                {
+                  "name": "Cache-Control",
+                  "value": "no-store"
+                }
+              ]
+            }
+          }
+        },
+        "id": "98af13cb-f420-505e-80af-eb533e3e6d9e",
+        "name": "Bad action",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          1100,
+          1400
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "d4rAEGcJRHUxFFkS"
+          },
+          "returnAll": true,
+          "options": {}
+        },
+        "id": "3d61bcd4-bb3f-5687-8bc2-718a9845ac7b",
+        "name": "List escalations",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1100,
+          200
+        ],
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "jsCode": "// Open first, newest first, max 50 (contract: escalations).\nconst rows = $input.all().map((i) => i.json).filter((r) => r && r.sender_id);\nrows.sort((a, b) => (a.status === 'open' ? 0 : 1) - (b.status === 'open' ? 0 : 1)\n  || String(b.escalated_at || '').localeCompare(String(a.escalated_at || '')));\nreturn [{ json: { items: rows.slice(0, 50).map((r) => ({ sender_id: String(r.sender_id), platform: r.platform,\n  customer_name: r.customer_name || '', reason: r.reason || '', escalated_at: r.escalated_at || '', status: r.status || 'open' })) } }];"
+        },
+        "id": "667bba7f-3f65-595e-8561-be8fd7e79e0f",
+        "name": "Sort escalations",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1320,
+          200
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify($json) }}",
+          "options": {
+            "responseCode": 200,
+            "responseHeaders": {
+              "entries": [
+                {
+                  "name": "Cache-Control",
+                  "value": "no-store"
+                }
+              ]
+            }
+          }
+        },
+        "id": "4d159a21-2a5b-55cc-8790-b8c795c294b6",
+        "name": "Escalations done",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          1540,
+          200
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "d4rAEGcJRHUxFFkS"
+          },
+          "matchType": "allConditions",
+          "returnAll": true,
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "sender_id",
+                "condition": "eq",
+                "keyValue": "={{ String($('Webhook').first().json.body.sender_id) }}"
+              },
+              {
+                "keyName": "platform",
+                "condition": "eq",
+                "keyValue": "={{ $('Webhook').first().json.body.platform }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "b7e6049c-6909-5966-9a7d-f2c921fa4eda",
+        "name": "Escalation Check",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1100,
+          700
+        ],
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose"
+            },
+            "conditions": [
+              {
+                "id": "Escalated?",
+                "leftValue": "={{ String(($json.ai_enabled != null) || $('Escalation Check').all().some((i) => i.json && i.json.sender_id != null && String(i.json.sender_id) === String($('Webhook').first().json.body.sender_id) && i.json.platform === $('Webhook').first().json.body.platform)) }}",
+                "rightValue": "true",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "1662da4a-7c11-5476-9983-7309e5087f22",
+        "name": "Escalated?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          1320,
+          700
+        ],
+        "executeOnce": true
+      },
+      {
+        "parameters": {
+          "rules": {
+            "values": [
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "loose"
+                  },
+                  "conditions": [
+                    {
+                      "id": "Target action_chat",
+                      "leftValue": "={{ String($('Webhook').first().json.body.action === 'chat') }}",
+                      "rightValue": "true",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "chat"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "loose"
+                  },
+                  "conditions": [
+                    {
+                      "id": "Target action_reply",
+                      "leftValue": "={{ String($('Webhook').first().json.body.action === 'reply') }}",
+                      "rightValue": "true",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "reply"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "loose"
+                  },
+                  "conditions": [
+                    {
+                      "id": "Target action_give_back",
+                      "leftValue": "={{ String($('Webhook').first().json.body.action === 'give_back') }}",
+                      "rightValue": "true",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "give_back"
+              }
+            ]
+          },
+          "options": {
+            "fallbackOutput": "extra"
+          }
+        },
+        "id": "d2a3dd00-d7e5-5703-96e8-f3f3a7521754",
+        "name": "Target action",
+        "type": "n8n-nodes-base.switch",
+        "typeVersion": 3,
+        "position": [
+          1540,
+          700
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT t.*\nFROM (\n  SELECT m.*\n    FROM messages m\n    JOIN (SELECT c.id\n  FROM conversations c\n  JOIN chat_sessions s ON s.id = c.session_id\n WHERE s.platform_id = IF(SUBSTRING($1, 3) = 'whatsapp', 1, 2) AND s.session_id = SUBSTRING($2, 3) AND s.deleted_at IS NULL\n ORDER BY c.id\n LIMIT 1) conv ON conv.id = m.conversation_id\n   ORDER BY m.id DESC\n   LIMIT 100\n) t\nORDER BY t.id ASC",
+          "options": {
+            "queryReplacement": "={{ [ (v => v == null ? null : 's:' + v)($('Webhook').first().json.body.platform), (v => v == null ? null : 's:' + v)(String($('Webhook').first().json.body.sender_id)) ] }}"
+          }
+        },
+        "id": "709fec15-a6a5-5c94-8bfa-4ba2ecb074aa",
+        "name": "Load history",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          1760,
+          400
+        ],
+        "credentials": {
+          "mySql": {
+            "id": "apLhSdbSQHjaIsZY",
+            "name": "BDMigration (WA sales bot)"
+          }
+        },
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2000
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT ai_enabled, label\nFROM sales_bot_user_ai_control\nWHERE sender_id = SUBSTRING($1, 3) AND platform = $2\nLIMIT 1",
+          "options": {
+            "queryReplacement": "={{ [ (v => v == null ? null : 's:' + v)(String($('Webhook').first().json.body.sender_id)), (v => v == null ? null : 's:' + v)($('Webhook').first().json.body.platform) ] }}"
+          }
+        },
+        "id": "59064101-111d-56b8-9fad-1d3546178272",
+        "name": "Load AI control",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          1980,
+          400
+        ],
+        "credentials": {
+          "mySql": {
+            "id": "apLhSdbSQHjaIsZY",
+            "name": "BDMigration (WA sales bot)"
+          }
+        },
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2000
+      },
+      {
+        "parameters": {
+          "jsCode": "// Contract: chat. History rows (oldest first) + bot mode from sales_bot_user_ai_control + latest escalation row.\nconst b = $('Webhook').first().json.body;\nconst msgs = $('Load history').all().map((i) => i.json).filter((r) => r && r.message != null);\nconst ctl = $('Load AI control').first().json;\nconst esc = $('Escalation Check').all().map((i) => i.json).filter((r) => r && r.sender_id)\n  .sort((x, y) => (x.status === 'open' ? 0 : 1) - (y.status === 'open' ? 0 : 1)\n    || String(y.escalated_at || '').localeCompare(String(x.escalated_at || '')))[0] || {};\nconst at = (r) => { const v = r.created_at ?? r.createdAt ?? null; if (v == null) return null; const d = new Date(v); return isNaN(d) ? null : d.toISOString(); };\nreturn [{ json: {\n  sender_id: String(b.sender_id), platform: b.platform,\n  customer_name: esc.customer_name || ctl.label || '', reason: esc.reason || '',\n  mode: ctl && ctl.ai_enabled != null && Number(ctl.ai_enabled) === 0 ? 'human' : 'bot',\n  messages: msgs.map((r) => ({ role: r.sender === 'bot' ? 'bot' : 'customer', text: String(r.message), at: at(r) })),\n} }];"
+        },
+        "id": "3f577c47-a4c9-50a1-b31e-9f3279477961",
+        "name": "Build chat",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2200,
+          400
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify($json) }}",
+          "options": {
+            "responseCode": 200,
+            "responseHeaders": {
+              "entries": [
+                {
+                  "name": "Cache-Control",
+                  "value": "no-store"
+                }
+              ]
+            }
+          }
+        },
+        "id": "59f0f1ff-8728-5a2f-9b75-31afa8d2c889",
+        "name": "Chat done",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          2420,
+          400
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose"
+            },
+            "conditions": [
+              {
+                "id": "Facebook?",
+                "leftValue": "={{ String($('Webhook').first().json.body.platform === 'facebook') }}",
+                "rightValue": "true",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "3fce5cf7-5e77-59ce-9b11-c68b0e15b16f",
+        "name": "Facebook?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          1760,
+          650
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://graph.facebook.com/v25.0/me/messages",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ recipient: { id: String($('Webhook').first().json.body.sender_id) }, messaging_type: 'RESPONSE', message: { text: $('Webhook').first().json.body.text } }) }}",
+          "options": {}
+        },
+        "id": "31dae0fc-5708-5857-83aa-3522d13301ec",
+        "name": "Send Messenger",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1980,
+          600
+        ],
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "VGOLffdMEAJqakI9",
+            "name": "BotGenius page token"
+          }
+        },
+        "onError": "continueErrorOutput"
+      },
+      {
+        "parameters": {
+          "operation": "send",
+          "phoneNumberId": "1140381445805651",
+          "recipientPhoneNumber": "={{ String($('Webhook').first().json.body.sender_id) }}",
+          "textBody": "={{ $('Webhook').first().json.body.text }}",
+          "additionalFields": {}
+        },
+        "id": "a1329328-5b21-5b07-80d3-be41f3a48dd3",
+        "name": "Send WhatsApp",
+        "type": "n8n-nodes-base.whatsApp",
+        "typeVersion": 1.1,
+        "position": [
+          1980,
+          760
+        ],
+        "credentials": {
+          "whatsAppApi": {
+            "id": "fJ0K4TzoEL3Pvbpq",
+            "name": "WhatsApp account"
+          }
+        },
+        "onError": "continueErrorOutput",
+        "webhookId": "a1329328-5b21-5b07-80d3-be41f3a48dd3"
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO messages (conversation_id, sender, message)\nSELECT conv.id, 'bot', SUBSTRING($1, 3)\n  FROM (SELECT c.id\n  FROM conversations c\n  JOIN chat_sessions s ON s.id = c.session_id\n WHERE s.platform_id = IF(SUBSTRING($2, 3) = 'whatsapp', 1, 2) AND s.session_id = SUBSTRING($3, 3) AND s.deleted_at IS NULL\n ORDER BY c.id\n LIMIT 1) conv",
+          "options": {
+            "queryReplacement": "={{ [ (v => v == null ? null : 's:' + v)($('Webhook').first().json.body.text), (v => v == null ? null : 's:' + v)($('Webhook').first().json.body.platform), (v => v == null ? null : 's:' + v)(String($('Webhook').first().json.body.sender_id)) ] }}"
+          }
+        },
+        "id": "08aa618e-13e5-5987-b796-60efffe0e436",
+        "name": "Save reply",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          2200,
+          600
+        ],
+        "credentials": {
+          "mySql": {
+            "id": "apLhSdbSQHjaIsZY",
+            "name": "BDMigration (WA sales bot)"
+          }
+        },
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2000,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({ ok: true }) }}",
+          "options": {
+            "responseCode": 200,
+            "responseHeaders": {
+              "entries": [
+                {
+                  "name": "Cache-Control",
+                  "value": "no-store"
+                }
+              ]
+            }
+          }
+        },
+        "id": "dad643a6-94bf-5c9d-86c6-f359341241d3",
+        "name": "Reply sent",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          2420,
+          600
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({ error: 'send_failed', detail: String($json.error?.message ?? $json.error?.description ?? $json.error ?? 'send error').slice(0, 300) }) }}",
+          "options": {
+            "responseCode": 502,
+            "responseHeaders": {
+              "entries": [
+                {
+                  "name": "Cache-Control",
+                  "value": "no-store"
+                }
+              ]
+            }
+          }
+        },
+        "id": "8f89732b-d0c4-5d70-a9c5-54682dd93397",
+        "name": "Send failed",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          2200,
+          820
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO sales_bot_user_ai_control (sender_id, platform, ai_enabled, disabled_by, escalated_at)\nVALUES (SUBSTRING($1, 3), SUBSTRING($2, 3), 1, NULL, NULL)\nON DUPLICATE KEY UPDATE ai_enabled = 1, disabled_by = NULL, escalated_at = NULL",
+          "options": {
+            "queryReplacement": "={{ [ (v => v == null ? null : 's:' + v)(String($('Webhook').first().json.body.sender_id)), (v => v == null ? null : 's:' + v)($('Webhook').first().json.body.platform) ] }}"
+          }
+        },
+        "id": "e2de2009-25e9-5d6b-b857-9dcd1628e174",
+        "name": "AI control on",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          1760,
+          1000
+        ],
+        "credentials": {
+          "mySql": {
+            "id": "apLhSdbSQHjaIsZY",
+            "name": "BDMigration (WA sales bot)"
+          }
+        },
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2000
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "update",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "d4rAEGcJRHUxFFkS"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "sender_id",
+                "condition": "eq",
+                "keyValue": "={{ String($('Webhook').first().json.body.sender_id) }}"
+              },
+              {
+                "keyName": "platform",
+                "condition": "eq",
+                "keyValue": "={{ $('Webhook').first().json.body.platform }}"
+              }
+            ]
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "status": "closed"
+            },
+            "matchingColumns": [],
+            "schema": []
+          },
+          "options": {}
+        },
+        "id": "baafd8c1-57e0-5c71-902c-147185b86c7c",
+        "name": "Close escalation",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1980,
+          1000
+        ],
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({ ok: true, mode: 'bot' }) }}",
+          "options": {
+            "responseCode": 200,
+            "responseHeaders": {
+              "entries": [
+                {
+                  "name": "Cache-Control",
+                  "value": "no-store"
+                }
+              ]
+            }
+          }
+        },
+        "id": "0c45e958-e2cf-5ee2-9437-b6bbbacf8e21",
+        "name": "Given back",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          2200,
+          1000
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "deleteRows",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "SOJ0ICbIQdsMOyJP"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "token",
+                "condition": "eq",
+                "keyValue": "={{ String($('Webhook').first().json.headers?.authorization || '').replace(/^Bearer\\s+/i, '').trim() || '-' }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "d7f9f833-8ac0-59d2-a1fe-fee255203460",
+        "name": "Delete session",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1100,
+          800
+        ],
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({ ok: true }) }}",
+          "options": {
+            "responseCode": 200,
+            "responseHeaders": {
+              "entries": [
+                {
+                  "name": "Cache-Control",
+                  "value": "no-store"
+                }
+              ]
+            }
+          }
+        },
+        "id": "debedc60-3480-529e-ba15-5a6f605e63d4",
+        "name": "Logged out",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          1320,
+          800
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT sender_id, platform, ai_enabled, disabled_by, escalated_at, last_message, last_seen, label\nFROM sales_bot_user_ai_control\nORDER BY last_seen DESC\nLIMIT 200",
+          "options": {}
+        },
+        "id": "34d22dbe-bc9b-49ed-9263-5c196b25b946",
+        "name": "Conversations control",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          1100,
+          900
+        ],
+        "credentials": {
+          "mySql": {
+            "id": "apLhSdbSQHjaIsZY",
+            "name": "BDMigration (WA sales bot)"
+          }
+        },
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2000
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "d4rAEGcJRHUxFFkS"
+          },
+          "returnAll": true,
+          "options": {}
+        },
+        "id": "c924691c-80bb-4565-8647-8f66edde1714",
+        "name": "List conversations",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1320,
+          900
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true
+      },
+      {
+        "parameters": {
+          "jsCode": "// Unified inbox: every known conversation + its latest escalation.\nconst ctl = $('Conversations control').all().map((i) => i.json).filter((r) => r && r.sender_id != null);\nconst esc = $input.all().map((i) => i.json).filter((r) => r && r.sender_id != null);\nconst key = (r) => String(r.platform) + '/' + String(r.sender_id);\nconst iso = (v) => {\n  if (v == null || v === '') return null;\n  const d = new Date(v);\n  return isNaN(d.getTime()) ? null : d.toISOString();\n};\nconst map = new Map();\n\nfor (const r of ctl) {\n  const platform = String(r.platform || '').toLowerCase();\n  if (!['facebook', 'whatsapp'].includes(platform)) continue;\n  const human = Number(r.ai_enabled) === 0;\n  map.set(key({ platform, sender_id: r.sender_id }), {\n    sender_id: String(r.sender_id),\n    platform,\n    customer_name: String(r.label || ''),\n    last_message: String(r.last_message || ''),\n    last_seen: iso(r.last_seen),\n    mode: human ? 'human' : 'bot',\n    status: human ? 'open' : 'active',\n    reason: '',\n    escalated_at: iso(r.escalated_at),\n  });\n}\n\nfor (const r of esc) {\n  const platform = String(r.platform || '').toLowerCase();\n  if (!['facebook', 'whatsapp'].includes(platform)) continue;\n  const k = key({ platform, sender_id: r.sender_id });\n  const cur = map.get(k) || {\n    sender_id: String(r.sender_id),\n    platform,\n    customer_name: '',\n    last_message: '',\n    last_seen: null,\n    mode: 'human',\n    status: 'open',\n    reason: '',\n    escalated_at: null,\n  };\n  cur.customer_name = String(r.customer_name || cur.customer_name || '');\n  cur.reason = String(r.reason || cur.reason || '');\n  cur.escalated_at = iso(r.escalated_at) || cur.escalated_at;\n  const status = String(r.status || 'open').toLowerCase();\n  if (status === 'open') {\n    cur.status = 'open';\n    cur.mode = 'human';\n  } else if (cur.mode !== 'human') {\n    cur.status = 'closed';\n  }\n  if (!cur.last_seen) cur.last_seen = cur.escalated_at;\n  map.set(k, cur);\n}\n\nconst items = [...map.values()]\n  .sort((a, b) => String(b.last_seen || b.escalated_at || '')\n    .localeCompare(String(a.last_seen || a.escalated_at || '')))\n  .slice(0, 200);\nreturn [{ json: { items } }];"
+        },
+        "id": "b4a92503-98b1-43e8-85bc-94d5c07dea2f",
+        "name": "Build conversations",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1540,
+          900
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify($json) }}",
+          "options": {
+            "responseCode": 200,
+            "responseHeaders": {
+              "entries": [
+                {
+                  "name": "Cache-Control",
+                  "value": "no-store"
+                }
+              ]
+            }
+          }
+        },
+        "id": "ec3c8f57-4dc6-44a5-98fc-3a4a34575f28",
+        "name": "Conversations done",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          1760,
+          900
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO sales_bot_user_ai_control (sender_id, platform, ai_enabled, disabled_by, escalated_at)\nVALUES (SUBSTRING($1, 3), $2, $3, IF($3 = 0, 'cm_app', NULL), IF($3 = 0, NOW(), NULL))\nON DUPLICATE KEY UPDATE\n  platform = VALUES(platform),\n  ai_enabled = VALUES(ai_enabled),\n  disabled_by = VALUES(disabled_by),\n  escalated_at = VALUES(escalated_at)",
+          "options": {
+            "queryReplacement": "={{ [ (v => v == null ? null : 's:' + v)(String($('Webhook').first().json.body.sender_id)), (v => v == null ? null : 's:' + v)($('Webhook').first().json.body.platform), $('Webhook').first().json.body.mode === 'human' ? 0 : 1 ] }}"
+          }
+        },
+        "id": "e2a2b540-d50a-475f-bb0f-0a15fdc6928c",
+        "name": "Set AI mode",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          1100,
+          1050
+        ],
+        "credentials": {
+          "mySql": {
+            "id": "apLhSdbSQHjaIsZY",
+            "name": "BDMigration (WA sales bot)"
+          }
+        },
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2000
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose"
+            },
+            "conditions": [
+              {
+                "id": "Mode is bot?",
+                "leftValue": "={{ String($('Webhook').first().json.body.mode === 'bot') }}",
+                "rightValue": "true",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "eecabd7c-c3cd-48ca-8566-9a86031c8943",
+        "name": "Mode is bot?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          1320,
+          1050
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "update",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "d4rAEGcJRHUxFFkS"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "sender_id",
+                "condition": "eq",
+                "keyValue": "={{ String($('Webhook').first().json.body.sender_id) }}"
+              },
+              {
+                "keyName": "platform",
+                "condition": "eq",
+                "keyValue": "={{ $('Webhook').first().json.body.platform }}"
+              }
+            ]
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "status": "closed"
+            },
+            "matchingColumns": [],
+            "schema": []
+          },
+          "options": {}
+        },
+        "id": "3282baa3-bcba-4f25-baff-3eeca938973b",
+        "name": "Close escalation (AI)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1540,
+          1050
+        ],
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({ ok: true, mode: $('Webhook').first().json.body.mode, status: $('Webhook').first().json.body.mode === 'human' ? 'open' : 'active' }) }}",
+          "options": {
+            "responseCode": 200,
+            "responseHeaders": {
+              "entries": [
+                {
+                  "name": "Cache-Control",
+                  "value": "no-store"
+                }
+              ]
+            }
+          }
+        },
+        "id": "6fcb12d0-8e8c-4837-a6dd-4604d0ce6c9b",
+        "name": "AI mode done",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          1760,
+          1050
+        ]
+      }
+    ],
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Route",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Route": {
+        "main": [
+          [
+            {
+              "node": "Hash password",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Auth Gate",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Hash password": {
+        "main": [
+          [
+            {
+              "node": "Find user",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Find user": {
+        "main": [
+          [
+            {
+              "node": "Login OK?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Login OK?": {
+        "main": [
+          [
+            {
+              "node": "New token",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Bad login",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "New token": {
+        "main": [
+          [
+            {
+              "node": "Save session",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Save session": {
+        "main": [
+          [
+            {
+              "node": "Login done",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Auth Gate": {
+        "main": [
+          [
+            {
+              "node": "Authorized?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Authorized?": {
+        "main": [
+          [
+            {
+              "node": "Action",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Unauthorized",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Action": {
+        "main": [
+          [
+            {
+              "node": "List escalations",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Conversations control",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Set AI mode",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Escalation Check",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Escalation Check",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Escalation Check",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Delete session",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Bad request",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Bad action",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Escalation Check": {
+        "main": [
+          [
+            {
+              "node": "Load AI control",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Escalated?": {
+        "main": [
+          [
+            {
+              "node": "Target action",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Bad request",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Target action": {
+        "main": [
+          [
+            {
+              "node": "Load history",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Facebook?",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "AI control on",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "List escalations": {
+        "main": [
+          [
+            {
+              "node": "Sort escalations",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Sort escalations": {
+        "main": [
+          [
+            {
+              "node": "Escalations done",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load history": {
+        "main": [
+          [
+            {
+              "node": "Build chat",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load AI control": {
+        "main": [
+          [
+            {
+              "node": "Escalated?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Build chat": {
+        "main": [
+          [
+            {
+              "node": "Chat done",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Facebook?": {
+        "main": [
+          [
+            {
+              "node": "Send Messenger",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Send WhatsApp",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Send Messenger": {
+        "main": [
+          [
+            {
+              "node": "Save reply",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Send failed",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Send WhatsApp": {
+        "main": [
+          [
+            {
+              "node": "Save reply",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Send failed",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Save reply": {
+        "main": [
+          [
+            {
+              "node": "Reply sent",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "AI control on": {
+        "main": [
+          [
+            {
+              "node": "Close escalation",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Close escalation": {
+        "main": [
+          [
+            {
+              "node": "Given back",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Delete session": {
+        "main": [
+          [
+            {
+              "node": "Logged out",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Conversations control": {
+        "main": [
+          [
+            {
+              "node": "List conversations",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "List conversations": {
+        "main": [
+          [
+            {
+              "node": "Build conversations",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Build conversations": {
+        "main": [
+          [
+            {
+              "node": "Conversations done",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Set AI mode": {
+        "main": [
+          [
+            {
+              "node": "Mode is bot?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Mode is bot?": {
+        "main": [
+          [
+            {
+              "node": "Close escalation (AI)",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "AI mode done",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Close escalation (AI)": {
+        "main": [
+          [
+            {
+              "node": "AI mode done",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "Mahdi Gasmi",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "workflowPublishHistory": [
+      {
+        "createdAt": "2026-11-05T10:38:05.317Z",
+        "id": 2960,
+        "workflowId": "t3q8R2tAXC1SfI1a",
+        "versionId": "690b2254-644f-4a58-ac80-212b0f78fac5",
+        "event": "activated",
+        "userId": "58fced48-1d85-4035-a463-a67052027d86"
+      },
+      {
+        "createdAt": "2026-11-05T10:38:05.259Z",
+        "id": 2959,
+        "workflowId": "t3q8R2tAXC1SfI1a",
+        "versionId": "690b2254-644f-4a58-ac80-212b0f78fac5",
+        "event": "deactivated",
+        "userId": "58fced48-1d85-4035-a463-a67052027d86"
+      }
+    ]
+  }
+}

@@ -6,44 +6,55 @@ import 'package:cm_app/app/strings.dart';
 import 'package:cm_app/push/push_service.dart';
 import 'package:equatable/equatable.dart';
 
-final class const EscalationsState({
-  final List<Escalation> items = const [],
+/// The unified WhatsApp + Facebook inbox.
+final class const InboxState({
+  final List<Conversation> conversations = const [],
   final bool loading = false,
   final String? error,
   final bool notificationsOff = false,
   final bool offline = false,
+  final Set<String> toggling = const {},
 }) extends Equatable {
   /// Every call sets `error` again: a plain copy clears it.
-  EscalationsState copyWith({
-    List<Escalation>? items,
+  InboxState copyWith({
+    List<Conversation>? conversations,
     bool? loading,
     String? error,
     bool? notificationsOff,
     bool? offline,
-  }) => EscalationsState(
-    items: items ?? this.items,
+    Set<String>? toggling,
+  }) => InboxState(
+    conversations: conversations ?? this.conversations,
     loading: loading ?? this.loading,
     error: error,
     notificationsOff: notificationsOff ?? this.notificationsOff,
     offline: offline ?? this.offline,
+    toggling: toggling ?? this.toggling,
   );
 
   @override
-  List<Object?> get props => [items, loading, error, notificationsOff, offline];
+  List<Object?> get props => [
+    conversations,
+    loading,
+    error,
+    notificationsOff,
+    offline,
+    toggling,
+  ];
 }
 
 Stream<void> _every30Seconds() =>
     Stream<void>.periodic(const Duration(seconds: 30));
 
-class EscalationsCubit extends Cubit<EscalationsState> {
-  /// Each foreground push from [_push] reloads the list. [_ticks] makes the
+class InboxCubit extends Cubit<InboxState> {
+  /// Each foreground push from [_push] reloads the inbox. [_ticks] makes the
   /// polling clock (tests pass their own).
   new(
     this._api, {
     required this._onUnauthorized,
     this._push = const NoopPushService(),
     this._ticks = _every30Seconds,
-  }) : super(const EscalationsState(loading: true)) {
+  }) : super(const InboxState(loading: true)) {
     _alerts = _push.foreground.listen((_) => unawaited(load()));
   }
 
@@ -67,8 +78,7 @@ class EscalationsCubit extends Cubit<EscalationsState> {
     await super.close();
   }
 
-  /// Loads the list with a spinner. The server sorts it: open first, newest
-  /// first.
+  /// Loads the inbox with a spinner.
   Future<void> load() => _fetch(silent: false);
 
   /// Silent load for polling: no spinner, the list stays on error. Skipped
@@ -89,15 +99,61 @@ class EscalationsCubit extends Cubit<EscalationsState> {
     _poll = null;
   }
 
+  /// Switches one conversation between the bot and a human. The switch is
+  /// independent of an escalation: it upserts the AI-control row.
+  Future<void> setAiMode(Conversation conversation, ChatMode mode) async {
+    final key = _key(conversation);
+    if (isClosed || conversation.mode == mode || state.toggling.contains(key)) {
+      return;
+    }
+    // Always build a fresh set: states keep a reference, so mutating the set
+    // after emitting would change the state that was already emitted.
+    emit(state.copyWith(toggling: {...state.toggling, key}));
+    try {
+      final applied = await _api.setAiMode(
+        conversation.senderId,
+        conversation.platform,
+        mode,
+      );
+      if (isClosed) return;
+      emit(
+        state.copyWith(
+          conversations: [
+            for (final item in state.conversations)
+              _same(item, conversation) ? _withMode(item, applied) : item,
+          ],
+          toggling: _without(key),
+        ),
+      );
+    } on UnauthorizedException {
+      _onUnauthorized();
+      if (!isClosed) {
+        emit(state.copyWith(toggling: _without(key)));
+      }
+    } on Object catch (e) {
+      if (!isClosed) {
+        emit(
+          state.copyWith(error: Strings.errorFor(e), toggling: _without(key)),
+        );
+      }
+    }
+  }
+
   Future<void> _fetch({required bool silent}) async {
     final seq = ++_seq;
     if (!silent) emit(state.copyWith(loading: true));
     _inFlight++;
     try {
-      final items = await _api.escalations();
+      final conversations = await _api.conversations();
       _failures = 0;
       if (!isClosed && seq == _seq) {
-        emit(state.copyWith(items: items, loading: false, offline: false));
+        emit(
+          state.copyWith(
+            conversations: conversations,
+            loading: false,
+            offline: false,
+          ),
+        );
       }
     } on UnauthorizedException {
       _onUnauthorized();
@@ -133,4 +189,25 @@ class EscalationsCubit extends Cubit<EscalationsState> {
       emit(state.copyWith(notificationsOff: !enabled, error: state.error));
     }
   }
+
+  Set<String> _without(String key) => {...state.toggling}..remove(key);
+
+  static String _key(Conversation c) => '${c.platform}/${c.senderId}';
+
+  static bool _same(Conversation a, Conversation b) =>
+      a.senderId == b.senderId && a.platform == b.platform;
+
+  static Conversation _withMode(Conversation c, ChatMode mode) => Conversation(
+    senderId: c.senderId,
+    platform: c.platform,
+    customerName: c.customerName,
+    lastMessage: c.lastMessage,
+    lastSeen: c.lastSeen,
+    mode: mode,
+    status: mode == ChatMode.human
+        ? 'open'
+        : (c.status == 'closed' ? 'closed' : 'active'),
+    reason: c.reason,
+    escalatedAt: c.escalatedAt,
+  );
 }

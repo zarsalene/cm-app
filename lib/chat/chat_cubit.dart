@@ -10,6 +10,7 @@ import 'package:equatable/equatable.dart';
 final class const ChatState({
   final Chat? chat,
   final bool sending = false,
+  final bool switching = false,
   final String? error,
   final String draft = '',
 }) extends Equatable {
@@ -17,17 +18,19 @@ final class const ChatState({
   ChatState copyWith({
     Chat? chat,
     bool? sending,
+    bool? switching,
     String? error,
     String? draft,
   }) => ChatState(
     chat: chat ?? this.chat,
     sending: sending ?? this.sending,
+    switching: switching ?? this.switching,
     error: error,
     draft: draft ?? this.draft,
   );
 
   @override
-  List<Object?> get props => [chat, sending, error, draft];
+  List<Object?> get props => [chat, sending, switching, error, draft];
 }
 
 Stream<void> _every10Seconds() =>
@@ -76,7 +79,7 @@ class ChatCubit extends Cubit<ChatState> {
   /// send or give-back runs. Before the first load succeeded it retries
   /// that load instead; its error stays on screen until the retry ends.
   Future<void> refresh() async {
-    if (isClosed || _refreshing || state.sending) return;
+    if (isClosed || _refreshing || state.sending || state.switching) return;
     _refreshing = true;
     if (state.chat == null) {
       try {
@@ -89,7 +92,7 @@ class ChatCubit extends Cubit<ChatState> {
     final seq = _seq;
     try {
       final chat = await _api.chat(_senderId, _platform);
-      if (!isClosed && seq == _seq && !state.sending) {
+      if (!isClosed && seq == _seq && !state.sending && !state.switching) {
         emit(state.copyWith(chat: chat, error: state.error));
       }
     } on UnauthorizedException {
@@ -116,7 +119,12 @@ class ChatCubit extends Cubit<ChatState> {
   /// Sends [text]. On failure the text stays in `draft`.
   Future<void> sendReply(String text) async {
     final chat = state.chat;
-    if (state.sending || chat == null || chat.mode == ChatMode.bot) return;
+    if (state.sending ||
+        state.switching ||
+        chat == null ||
+        chat.mode == ChatMode.bot) {
+      return;
+    }
     if (text.trim().isEmpty) return;
     _seq++;
     emit(state.copyWith(sending: true, draft: text));
@@ -138,24 +146,43 @@ class ChatCubit extends Cubit<ChatState> {
     }
   }
 
-  Future<void> giveBack() async {
+  Future<void> giveBack() => setAiMode(ChatMode.bot);
+
+  /// Switches the conversation between the bot and a human. Independent of
+  /// an escalation: the backend upserts the AI-control row.
+  Future<void> setAiMode(ChatMode mode) async {
     final chat = state.chat;
-    if (state.sending || chat == null) return;
+    if (state.sending || state.switching || chat == null || chat.mode == mode) {
+      return;
+    }
     _seq++;
-    emit(state.copyWith(sending: true));
+    emit(state.copyWith(switching: true));
     try {
-      await _api.giveBack(_senderId, _platform);
+      final applied = await _api.setAiMode(_senderId, _platform, mode);
       if (isClosed) return;
       final current = state.chat ?? chat;
       emit(
         state.copyWith(
-          sending: false,
-          chat: _chatWith(current, mode: ChatMode.bot),
+          switching: false,
+          draft: mode == ChatMode.bot ? '' : null,
+          chat: _chatWith(current, mode: applied),
         ),
       );
     } on Object catch (e) {
-      _fail(e);
+      _failSwitch(e);
     }
+  }
+
+  void _failSwitch(Object error) {
+    final expired = error is UnauthorizedException;
+    if (expired) _onUnauthorized();
+    if (isClosed) return;
+    emit(
+      state.copyWith(
+        switching: false,
+        error: expired ? null : Strings.errorFor(error),
+      ),
+    );
   }
 
   void _fail(Object error, {bool endsSending = true}) {

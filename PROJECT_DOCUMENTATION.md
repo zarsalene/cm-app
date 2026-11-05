@@ -3,7 +3,7 @@
 **App Name:** Z-Smart-CM  
 **Package:** `cm_app`  
 **Platform:** Flutter (Android, iOS, Web)  
-**Version:** 3.1.2+7  
+**Version:** 3.2.0+9  
 **Flutter SDK:** `^3.47.0`  
 **Dart SDK:** `^3.13.0`  
 **Primary Language:** French (UI)  
@@ -14,13 +14,13 @@
 ## 1. Project Overview
 
 **Purpose:**  
-Z-Smart-CM is a customer management mobile application for community managers (CM) to handle customer escalations and conversations across Facebook Messenger and WhatsApp. When a bot escalates a conversation to a human, the CM receives a push alert, opens the conversation, replies directly, and can hand the conversation back to the bot.
+Z-Smart-CM is a customer management mobile application for community managers (CM) to handle Facebook Messenger and WhatsApp conversations from one inbox. The bot answers automatically; when it escalates, the CM receives a push alert, opens the conversation, replies directly, and can hand the conversation back to the bot — or take over / release any conversation at any time, even if it never escalated.
 
 **Core user flow:**
-1. Bot detects escalation → push alert sent to CM device
-2. CM taps alert → app opens chat conversation
-3. CM replies to customer via Messenger/WhatsApp
-4. CM clicks "Rendre au bot" → conversation returns to automation, escalation marked closed
+1. Bot detects an escalation → push alert sent to CM device
+2. CM opens the unified inbox (or taps the alert) → sees human, bot and closed conversations
+3. CM replies to the customer via Messenger/WhatsApp
+4. CM taps "Activer le bot" → conversation returns to automation; tapping "Prendre la main" on any bot conversation switches it back to a human
 
 ---
 
@@ -34,7 +34,7 @@ lib/
 ├── auth/                  — Authentication (BLoC)
 ├── api/                   — API client + data models
 ├── chat/                  — Chat conversations (Cubit)
-├── escalations/           — Escalation list (Cubit)
+├── inbox/                 — Unified WhatsApp + Facebook inbox (Cubit)
 ├── settings/              — Settings, theme, notifications (Cubit)
 ├── profile/               — User profile page
 ├── help/                  — Help / FAQ page
@@ -46,7 +46,7 @@ lib/
 └── main_staging.dart      — Staging entry point
 ```
 
-**State Management:** `bloc` / `flutter_bloc` (BLoC for auth, Cubit for chat/escalations/settings)  
+**State Management:** `bloc` / `flutter_bloc` (BLoC for auth, Cubit for chat/inbox/settings)  
 **Navigation:** `go_router` (declarative, deep-linking support)  
 **Localization:** `intl` + `flutter_localizations` (French UI copy centralized in `strings.dart`)  
 **Theme:** Material 3 with dark mode, IBM Plex Sans Arabic font (RTL support)  
@@ -97,7 +97,8 @@ The `App` widget accepts optional constructor overrides for testing: `tokenStore
 | `/splash` | `SplashPage` | Shown while auth state is unknown |
 | `/login` | `LoginPage` | Shown when unauthenticated |
 | `/` | `DashboardPage` | Requires authentication |
-| `/escalations` | `EscalationsPage` | Requires authentication |
+| `/inbox` | `InboxPage` | Requires authentication |
+| `/escalations` | Redirect → `/inbox` | Legacy push payloads / bookmarks |
 | `/chat/:platform/:senderId` | `ChatPage` | Requires authentication |
 | `/settings` | `SettingsPage` | Requires authentication |
 | `/profile` | `ProfilePage` | Requires authentication |
@@ -152,7 +153,7 @@ All UI copy is centralized in the `Strings` abstract class. Primary language is 
 |----------|----------|
 | Auth | `loginTitle`, `loginHintUsername`, `loginHintPassword`, `loginButton`, `rememberMe`, `forgetPassword` |
 | Dashboard | `dashboardTitle`, `openEscalations`, `closedEscalations`, `recentActivity`, `viewAll` |
-| Escalations | `escalationsTitle`, `searchHint`, `allChannels`, `facebook`, `whatsapp`, `openSection`, `closedSection` |
+| Inbox | `inboxTitle`, `humanSection`, `botSection`, `closedConversations`, `takeOver`, `activateBot`, `searchHint`, `allChannels`, `facebook`, `whatsapp` |
 | Chat | `chatTitle`, `replyHint`, `send`, `giveBack`, `botAnswersAgain`, `quickReplies` |
 | Notifications | `pushActive`, `pushUnavailable`, `pushOff`, `newAlert`, `notificationsOff` |
 | Settings | `appearance`, `themeMode`, `themeLight`, `themeDark`, `themeSystem`, `language`, `notifications`, `pushNotifications`, `account`, `about` |
@@ -235,10 +236,11 @@ All UI copy is centralized in the `Strings` abstract class. Primary language is 
 | Action | Method | Request | Response | Description |
 |--------|--------|---------|----------|-------------|
 | `login` | POST | `{username, password}` | `Session` | Authenticate user |
-| `escalations` | POST | `{}` | `List<Escalation>` | List escalations (open first, newest first) |
-| `chat` | POST | `{sender_id, platform}` | `Chat` | Load one conversation |
+| `conversations` | POST | `{}` | `List<Conversation>` | Unified WhatsApp + Facebook conversations, newest activity first |
+| `set_ai_mode` | POST | `{sender_id, platform, mode}` | `{mode}` | Switch a conversation between `human` and `bot` (works without an escalation) |
+| `chat` | POST | `{sender_id, platform}` | `Chat` | Load one conversation (works for bot-only conversations) |
 | `reply` | POST | `{sender_id, platform, text}` | — | Send text reply to customer |
-| `give_back` | POST | `{sender_id, platform}` | — | Hand conversation back to bot |
+| `give_back` | POST | `{sender_id, platform}` | — | Legacy hand-back action (the app uses `set_ai_mode`) |
 | `logout` | POST | `{}` | — | End session on server |
 
 ### Exception Types
@@ -256,7 +258,8 @@ All UI copy is centralized in the `Strings` abstract class. Primary language is 
 | Model | Fields |
 |-------|--------|
 | `Session` | `token`, `username`, `expiresAt` |
-| `Escalation` | `senderId`, `platform`, `reason`, `escalatedAt`, `status`, `customerName?` |
+| `Conversation` | `senderId`, `platform`, `customerName?`, `lastMessage`, `lastSeen?`, `mode`, `status`, `reason`, `escalatedAt?` |
+| `Escalation` | `senderId`, `platform`, `reason`, `escalatedAt`, `status`, `customerName?` (legacy endpoint) |
 | `Chat` | `senderId`, `platform`, `reason`, `mode`, `messages[]`, `customerName?` |
 | `ChatMessage` | `role` (`customer`/`bot`), `text`, `at?` |
 | `ChatMode` | Enum: `human`, `bot` |
@@ -294,39 +297,39 @@ No-op implementation for builds without Firebase configuration.
 
 ---
 
-## 11. Dashboard & Escalations
+## 11. Dashboard & Inbox
 
 ### DashboardPage
 **File:** `lib/app/dashboard_page.dart`
 
-- Shows stat cards: open escalations, closed escalations, total, closure rate %
-- Highlights urgent escalations (under 15 minutes) in amber
-- Quick actions: view escalations, refresh
-- Recent activity list (5 most recent escalations)
-- Floating action button navigates to escalations list when open items exist
-- Pull-to-refresh and pull-down refresh indicator
+- Stat cards: open (human) conversations, bot-active conversations, total, handled today
+- Highlights conversations waiting under 15 minutes in amber
+- Quick actions: open the inbox, refresh
+- Recent activity list (5 most recent conversations)
+- Floating action button navigates to the inbox when open items exist
+- Pull-to-refresh
 
-### EscalationsPage
-**File:** `lib/escalations/escalations_page.dart`
+### InboxPage
+**File:** `lib/inbox/inbox_page.dart`
 
-- Search bar filtering by customer name, sender ID, or reason
-- Channel filter chips: All / Facebook / WhatsApp
+- One list for WhatsApp and Facebook, including conversations that never escalated
+- Search by customer name, sender ID, last message or reason
+- Channel filter: All / Facebook / WhatsApp; handler filter: All / Human / Bot
+- Sort: newest first / oldest first
+- Sections: À traiter (open), Bot actif, Fermées
+- Per-row real toggle: "Prendre la main" / "Activer le bot" (calls `set_ai_mode`)
 - Live toggle: start/stop 30-second automatic polling
-- Sections: Open (amber left border) and Closed
-- Skeleton loader while initial load is in progress
-- Empty state with illustration when no escalations
-- Error banner with retry button
-- Offline notice banner when connectivity lost
-- Notifications banner when push notifications are disabled
+- Skeleton loader, empty state, error banner with retry, offline and notifications banners
 - Row tap navigates to `/chat/{platform}/{senderId}`
 
-### EscalationsCubit
-**File:** `lib/escalations/escalations_cubit.dart`
+### InboxCubit
+**File:** `lib/inbox/inbox_cubit.dart`
 
-- Polls every 30 seconds when live mode is active
+- Loads the merged conversation list, polls every 30 seconds in live mode
 - Sequence number tracking prevents stale responses from overwriting newer data
-- Silent refresh (no spinner) during polling; loud refresh on manual pull
+- Silent refresh during polling; loud refresh on manual pull
 - Tracks consecutive failures; marks `offline` after 2 failures
+- `setAiMode()` switches one row and tracks its in-flight state per row
 - `checkNotifications()` reads push permission status
 
 ---
@@ -337,9 +340,9 @@ No-op implementation for builds without Firebase configuration.
 **Cubit:** `lib/chat/chat_cubit.dart`
 
 ### ChatPage Features
-- App bar shows customer name, sender ID, channel chip (FB/WA)
-- Back button returns to `/escalations` if no pop route exists
-- "Give back" confirmation dialog (warns about unsent draft)
+- App bar shows customer name, channel chip (FB/WA) and a real bot/human toggle
+- Back button returns to `/inbox` if no pop route exists
+- "Activer le bot" confirmation dialog (warns about unsent draft)
 - Message list with day separators (Today / Yesterday / date)
 - Message bubbles styled by role:
   - Customer: surface container with border
@@ -358,9 +361,10 @@ No-op implementation for builds without Firebase configuration.
 - Polls every 10 seconds when chat is open
 - Stops polling when app is paused/hidden/detached
 - `sendReply()` appends optimistic bot message, clears draft on success
-- `giveBack()` sets chat mode to `bot`, marks escalation closed
+- `setAiMode()` calls `set_ai_mode`; works without an escalation
+- `giveBack()` delegates to `setAiMode(ChatMode.bot)` and clears the draft
 - `load()` with `keepError` option preserves errors during silent refreshes
-- Sequence tracking prevents refresh from undoing send/give-back results
+- Sequence tracking prevents refresh from undoing send/mode-switch results
 
 ### Message Text Cleaning
 `cleanMessageText()` removes `[[ESCALATE]]` tokens and leaked prompt memory (`{"history": [...]}`) from bot messages before display.

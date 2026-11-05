@@ -1,12 +1,11 @@
-import 'package:cm_app/app/dashboard_page.dart';
-import 'package:cm_app/app/strings.dart';
-import 'package:cm_app/app/theme.dart';
-import 'package:cm_app/api/cm_api.dart';
-import 'package:cm_app/core/theme_mode_service.dart';
-import 'package:cm_app/escalations/escalations_cubit.dart';
-import 'package:cm_app/push/push_service.dart';
 import 'dart:async';
 
+import 'package:cm_app/api/cm_api.dart';
+import 'package:cm_app/app/dashboard_page.dart';
+import 'package:cm_app/app/strings.dart';
+import 'package:cm_app/core/theme_mode_service.dart';
+import 'package:cm_app/inbox/inbox_cubit.dart';
+import 'package:cm_app/push/push_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -28,50 +27,74 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  Widget _testWidget(EscalationsCubit cubit) {
+  Widget testWidget(InboxCubit cubit) {
     return MultiRepositoryProvider(
       providers: [
         RepositoryProvider<ThemeModeService>(
-          create: (_) => ThemeModeService(SharedPreferences.getInstance() as SharedPreferences),
+          create: (_) => ThemeModeService(
+            SharedPreferences.getInstance() as SharedPreferences,
+          ),
         ),
-        RepositoryProvider<PushService>(
-          create: (_) => _MockPushService(),
-        ),
+        RepositoryProvider<PushService>(create: (_) => _MockPushService()),
       ],
-      child: BlocProvider<EscalationsCubit>.value(
+      child: BlocProvider<InboxCubit>.value(
         value: cubit,
-        child: MaterialApp(home: DashboardPage()),
+        child: const MaterialApp(home: DashboardPage()),
       ),
     );
   }
 
+  Conversation conversation({
+    required String senderId,
+    required String platform,
+    required String name,
+    required String status,
+    required ChatMode mode,
+    required DateTime at,
+    String reason = 'Probleme de livraison',
+  }) => Conversation(
+    senderId: senderId,
+    platform: platform,
+    customerName: name,
+    lastMessage: reason,
+    lastSeen: at,
+    mode: mode,
+    status: status,
+    reason: reason,
+    escalatedAt: at,
+  );
+
   testWidgets(
-    'Dashboard shows priority queue with oldest open escalation first',
+    'Dashboard shows priority queue with oldest open conversation first',
     (tester) async {
       final api = _MockCmApi();
-      when(api.escalations).thenAnswer((_) async => [
-        Escalation(
-          senderId: '1000000000001',
-          platform: 'facebook',
-          customerName: 'Alice Martin',
-          reason: 'Probleme de livraison',
-          escalatedAt: DateTime.now().subtract(const Duration(minutes: 60)),
-          status: 'open',
-        ),
-        Escalation(
-          senderId: '21650123456',
-          platform: 'whatsapp',
-          customerName: 'Bob Durant',
-          reason: 'Demande de remboursement',
-          escalatedAt: DateTime.now().subtract(const Duration(minutes: 10)),
-          status: 'open',
-        ),
-      ]);
+      final now = DateTime.now();
+      when(api.conversations).thenAnswer(
+        (_) async => [
+          conversation(
+            senderId: '1000000000001',
+            platform: 'facebook',
+            name: 'Alice Martin',
+            status: 'open',
+            mode: ChatMode.human,
+            at: now.subtract(const Duration(minutes: 60)),
+          ),
+          conversation(
+            senderId: '21650123456',
+            platform: 'whatsapp',
+            name: 'Bob Durant',
+            status: 'open',
+            mode: ChatMode.human,
+            at: now.subtract(const Duration(minutes: 10)),
+            reason: 'Demande de remboursement',
+          ),
+        ],
+      );
 
-      final cubit = EscalationsCubit(api, onUnauthorized: () {});
+      final cubit = InboxCubit(api, onUnauthorized: () {});
       unawaited(cubit.load());
 
-      await tester.pumpWidget(_testWidget(cubit));
+      await tester.pumpWidget(testWidget(cubit));
       await _settle(tester);
 
       expect(find.text(Strings.priorityQueue), findsOneWidget);
@@ -87,53 +110,85 @@ void main() {
     },
   );
 
-  testWidgets(
-    'Dashboard shows handled today count',
-    (tester) async {
-      final api = _MockCmApi();
-      final today = DateTime.now();
-      when(api.escalations).thenAnswer((_) async => [
-        Escalation(
+  testWidgets('Dashboard shows handled today count', (tester) async {
+    final api = _MockCmApi();
+    final today = DateTime.now();
+    when(api.conversations).thenAnswer(
+      (_) async => [
+        conversation(
           senderId: '1000000000001',
           platform: 'facebook',
-          customerName: 'Alice Martin',
-          reason: 'Probleme de livraison',
-          escalatedAt: today.subtract(const Duration(hours: 2)),
+          name: 'Alice Martin',
           status: 'closed',
+          mode: ChatMode.bot,
+          at: today.subtract(const Duration(hours: 2)),
         ),
-        Escalation(
+        conversation(
           senderId: '21650123456',
           platform: 'whatsapp',
-          customerName: 'Bob Durant',
-          reason: 'Demande de remboursement',
-          escalatedAt: today.subtract(const Duration(days: 1)),
+          name: 'Bob Durant',
           status: 'closed',
+          mode: ChatMode.bot,
+          at: today.subtract(const Duration(days: 1)),
+          reason: 'Demande de remboursement',
         ),
-      ]);
+      ],
+    );
 
-      final cubit = EscalationsCubit(api, onUnauthorized: () {});
-      unawaited(cubit.load());
+    final cubit = InboxCubit(api, onUnauthorized: () {});
+    unawaited(cubit.load());
 
-      await tester.pumpWidget(_testWidget(cubit));
-      await _settle(tester);
+    await tester.pumpWidget(testWidget(cubit));
+    await _settle(tester);
 
-      expect(find.text('Traitees aujourd hui'), findsOneWidget);
-    },
-  );
+    expect(find.text('Traitees aujourd hui'), findsOneWidget);
+  });
 
-  testWidgets(
-    'Dashboard shows empty state when no escalations',
-    (tester) async {
-      final api = _MockCmApi();
-      when(api.escalations).thenAnswer((_) async => []);
+  testWidgets('Dashboard shows empty state when there is no conversation', (
+    tester,
+  ) async {
+    final api = _MockCmApi();
+    when(api.conversations).thenAnswer((_) async => []);
 
-      final cubit = EscalationsCubit(api, onUnauthorized: () {});
-      unawaited(cubit.load());
+    final cubit = InboxCubit(api, onUnauthorized: () {});
+    unawaited(cubit.load());
 
-      await tester.pumpWidget(_testWidget(cubit));
-      await _settle(tester);
+    await tester.pumpWidget(testWidget(cubit));
+    await _settle(tester);
 
-      expect(find.text(Strings.noEscalations), findsOneWidget);
-    },
-  );
+    expect(find.text(Strings.noConversations), findsOneWidget);
+  });
+
+  testWidgets('Dashboard counts bot conversations separately', (tester) async {
+    final api = _MockCmApi();
+    final now = DateTime.now();
+    when(api.conversations).thenAnswer(
+      (_) async => [
+        conversation(
+          senderId: '1000000000001',
+          platform: 'facebook',
+          name: 'Alice Martin',
+          status: 'open',
+          mode: ChatMode.human,
+          at: now,
+        ),
+        conversation(
+          senderId: '21650123456',
+          platform: 'whatsapp',
+          name: 'Bob Durant',
+          status: 'active',
+          mode: ChatMode.bot,
+          at: now,
+        ),
+      ],
+    );
+
+    final cubit = InboxCubit(api, onUnauthorized: () {});
+    unawaited(cubit.load());
+
+    await tester.pumpWidget(testWidget(cubit));
+    await _settle(tester);
+
+    expect(find.text(Strings.botSection), findsOneWidget);
+  });
 }

@@ -46,15 +46,18 @@ void main() {
       );
       when(api.logout).thenAnswer((_) async {});
       var closed = false;
-      when(api.escalations).thenAnswer(
+      when(api.conversations).thenAnswer(
         (_) async => [
-          Escalation(
+          Conversation(
             senderId: _fbId,
             platform: 'facebook',
             customerName: 'Sana Ben Ali',
+            lastMessage: 'Je veux un remboursement',
+            lastSeen: DateTime.now().subtract(const Duration(minutes: 4)),
+            mode: closed ? ChatMode.bot : ChatMode.human,
+            status: closed ? 'closed' : 'open',
             reason: 'Le client demande un remboursement',
             escalatedAt: DateTime.now().subtract(const Duration(minutes: 4)),
-            status: closed ? 'closed' : 'open',
           ),
         ],
       );
@@ -72,9 +75,11 @@ void main() {
         ),
       );
       when(() => api.reply(_fbId, 'facebook', any())).thenAnswer((_) async {});
-      when(() => api.giveBack(_fbId, 'facebook')).thenAnswer((_) async {
-        closed = true;
-      });
+      when(() => api.setAiMode(_fbId, 'facebook', ChatMode.bot))
+          .thenAnswer((_) async {
+            closed = true;
+            return ChatMode.bot;
+          });
 
       SharedPreferences.setMockInitialValues({});
       final prefs = await SharedPreferences.getInstance();
@@ -94,8 +99,8 @@ void main() {
       await tester.tap(find.text('Se connecter'));
       await tester.settle();
 
-      // Dashboard -> escalation list.
-      await tester.tap(find.text('Voir les 1 ouverte'));
+      // Dashboard -> unified inbox.
+      await tester.tap(find.text('Voir les 1 à traiter'));
       await tester.settle();
       expect(find.text('Sana Ben Ali'), findsOneWidget);
       expect(find.text('FB'), findsOneWidget);
@@ -104,8 +109,8 @@ void main() {
       // Back to the menu and forward again.
       await tester.tap(find.byTooltip('Retour au menu'));
       await tester.settle();
-      expect(find.text('Voir les 1 ouverte'), findsOneWidget);
-      await tester.tap(find.text('Voir les 1 ouverte'));
+      expect(find.text('Voir les 1 à traiter'), findsOneWidget);
+      await tester.tap(find.text('Voir les 1 à traiter'));
       await tester.settle();
 
       // List -> chat.
@@ -128,11 +133,12 @@ void main() {
       verify(() => api.reply(_fbId, 'facebook', 'Bonjour Sana')).called(1);
 
       // Give the chat back to the bot.
-      await tester.tap(find.byTooltip('Rendre au bot'));
+      await tester.tap(find.byTooltip('Activer le bot'));
       await tester.settle();
       await tester.tap(find.text('Confirmer'));
       await tester.settle();
-      verify(() => api.giveBack(_fbId, 'facebook')).called(1);
+      verify(() => api.setAiMode(_fbId, 'facebook', ChatMode.bot)).called(1);
+      expect(find.text(Strings.botAnswersAgain), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox());
     },

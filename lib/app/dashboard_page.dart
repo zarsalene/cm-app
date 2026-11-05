@@ -7,7 +7,7 @@ import 'package:cm_app/app/strings.dart';
 import 'package:cm_app/app/theme.dart';
 import 'package:cm_app/api/models.dart';
 import 'package:cm_app/auth/token_store.dart';
-import 'package:cm_app/escalations/escalations_cubit.dart';
+import 'package:cm_app/inbox/inbox_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -23,27 +23,38 @@ class DashboardPage extends StatelessWidget {
     final scheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
 
-    return BlocBuilder<EscalationsCubit, EscalationsState>(
+    return BlocBuilder<InboxCubit, InboxState>(
       builder: (context, state) {
-        final openItems = state.items.where((i) => i.status == 'open').toList();
-        final closedItems = state.items
+        final openItems = state.conversations
+            .where((i) => i.status == 'open')
+            .toList();
+        final botItems = state.conversations
+            .where((i) => i.status == 'active')
+            .toList();
+        final closedItems = state.conversations
             .where((i) => i.status == 'closed')
             .toList();
+        final now = DateTime.now();
         final under15 = openItems.where((i) {
-          return DateTime.now().difference(i.escalatedAt).inMinutes < 15;
+          final at = i.escalatedAt ?? i.lastSeen;
+          return at != null && now.difference(at).inMinutes < 15;
         }).length;
-        final today = DateTime.now();
         final handledToday = closedItems.where((i) {
-          final d = i.escalatedAt;
-          return d.year == today.year &&
-              d.month == today.month &&
-              d.day == today.day;
+          final d = i.escalatedAt ?? i.lastSeen;
+          return d != null &&
+              d.year == now.year &&
+              d.month == now.month &&
+              d.day == now.day;
         }).length;
 
         // Priority queue: oldest open escalations first (no backend priority
         // field exists yet, so oldest-waits-longest is the fair rule).
-        final priorityItems = List<Escalation>.from(openItems)
-          ..sort((a, b) => a.escalatedAt.compareTo(b.escalatedAt));
+        final priorityItems = List<Conversation>.from(openItems)
+          ..sort(
+            (a, b) => (a.escalatedAt ?? a.sortAt).compareTo(
+              b.escalatedAt ?? b.sortAt,
+            ),
+          );
 
         return Scaffold(
           drawer: const AppDrawer(),
@@ -60,7 +71,7 @@ class DashboardPage extends StatelessWidget {
             foregroundColor: scheme.onSurface,
             actions: [
               SpinRefreshButton(
-                onPressed: () => context.read<EscalationsCubit>().load(),
+                onPressed: () => context.read<InboxCubit>().load(),
               ),
               const SizedBox(width: AppSpacing.sm),
               _ProfileAvatar(),
@@ -72,6 +83,7 @@ class DashboardPage extends StatelessWidget {
               child: _DashboardBody(
                 state: state,
                 openItems: openItems,
+                botItems: botItems,
                 closedItems: closedItems,
                 under15: under15,
                 handledToday: handledToday,
@@ -83,11 +95,9 @@ class DashboardPage extends StatelessWidget {
           ),
           floatingActionButton: openItems.isNotEmpty
               ? FloatingActionButton.extended(
-                  onPressed: () => context.go('/escalations'),
+                  onPressed: () => context.go('/inbox'),
                   icon: const Icon(Icons.list),
-                  label: Text(
-                    'Voir les ${openItems.length} ouverte${openItems.length > 1 ? 's' : ''}',
-                  ),
+                  label: Text('Voir les ${openItems.length} à traiter'),
                   backgroundColor: scheme.primary,
                   foregroundColor: scheme.onPrimary,
                   shape: RoundedRectangleBorder(
@@ -107,6 +117,7 @@ class _DashboardBody extends StatelessWidget {
   const _DashboardBody({
     required this.state,
     required this.openItems,
+    required this.botItems,
     required this.closedItems,
     required this.under15,
     required this.handledToday,
@@ -115,31 +126,32 @@ class _DashboardBody extends StatelessWidget {
     required this.scheme,
   });
 
-  final EscalationsState state;
-  final List<Escalation> openItems;
-  final List<Escalation> closedItems;
+  final InboxState state;
+  final List<Conversation> openItems;
+  final List<Conversation> botItems;
+  final List<Conversation> closedItems;
   final int under15;
   final int handledToday;
-  final List<Escalation> priorityItems;
+  final List<Conversation> priorityItems;
   final ThemeData theme;
   final ColorScheme scheme;
 
   @override
   Widget build(BuildContext context) {
-    if (state.loading && state.items.isEmpty) {
+    if (state.loading && state.conversations.isEmpty) {
       return const _SkeletonDashboard();
     }
 
-    if (state.error != null && state.items.isEmpty) {
+    if (state.error != null && state.conversations.isEmpty) {
       return _ErrorState(
         theme: theme,
         scheme: scheme,
         message: state.error!,
-        onRetry: () => context.read<EscalationsCubit>().load(),
+        onRetry: () => context.read<InboxCubit>().load(),
       );
     }
 
-    if (state.items.isEmpty && state.error == null) {
+    if (state.conversations.isEmpty && state.error == null) {
       return _EmptyDashboard();
     }
 
@@ -175,14 +187,16 @@ class _DashboardBody extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '${state.items.length} escalade'
-                            '${state.items.length > 1 ? 's' : ''} au total · '
+                            '${state.conversations.length} conversation'
+                            '${state.conversations.length > 1 ? 's' : ''} au total · '
+                            '${botItems.length} avec le bot · '
                             '${Strings.liveLabel.toLowerCase()}',
                             style: theme.textTheme.bodyMedium?.copyWith(
                               color: scheme.onSurfaceVariant,
                             ),
                           ),
-                          if (state.items.isNotEmpty && state.error == null)
+                          if (state.conversations.isNotEmpty &&
+                              state.error == null)
                             Text(
                               'Dernière actualisation : il y a peu',
                               style: theme.textTheme.bodySmall?.copyWith(
@@ -208,9 +222,9 @@ class _DashboardBody extends StatelessWidget {
           sliver: SliverToBoxAdapter(
             child: _StatRow(
               openCount: openItems.length,
-              closedCount: closedItems.length,
+              botCount: botItems.length,
               under15: under15,
-              total: state.items.length,
+              total: state.conversations.length,
               handledToday: handledToday,
               theme: theme,
               scheme: scheme,
@@ -229,7 +243,7 @@ class _DashboardBody extends StatelessWidget {
                 theme: theme,
                 title: Strings.priorityQueue,
                 subtitle: Strings.priorityQueueSubtitle,
-                onViewAll: () => context.go('/escalations'),
+                onViewAll: () => context.go('/inbox'),
               ),
             ),
           ),
@@ -257,7 +271,7 @@ class _DashboardBody extends StatelessWidget {
             child: _SectionHeader(
               theme: theme,
               title: 'Actions',
-              subtitle: 'Gérer les escalades',
+              subtitle: 'Gérer les conversations',
             ),
           ),
         ),
@@ -267,14 +281,12 @@ class _DashboardBody extends StatelessWidget {
             horizontal: AppSpacing.pageGutter,
           ),
           sliver: SliverToBoxAdapter(
-            child: _QuickActions(
-              onViewEscalations: () => context.go('/escalations'),
-            ),
+            child: _QuickActions(onViewEscalations: () => context.go('/inbox')),
           ),
         ),
         const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xl)),
         // Recent activity (real items only)
-        if (state.items.isNotEmpty) ...[
+        if (state.conversations.isNotEmpty) ...[
           SliverPadding(
             padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.pageGutter,
@@ -284,7 +296,7 @@ class _DashboardBody extends StatelessWidget {
                 theme: theme,
                 title: Strings.recentActivity,
                 subtitle: Strings.viewAll,
-                onViewAll: () => context.go('/escalations'),
+                onViewAll: () => context.go('/inbox'),
               ),
             ),
           ),
@@ -295,7 +307,7 @@ class _DashboardBody extends StatelessWidget {
             ),
             sliver: SliverToBoxAdapter(
               child: _RecentList(
-                items: state.items,
+                items: state.conversations,
                 theme: theme,
                 scheme: scheme,
               ),
@@ -370,10 +382,10 @@ class _EmptyDashboard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: AppSpacing.vertical16),
-          Text(Strings.noEscalations, style: themeTextStyle(context)),
+          Text(Strings.noConversations, style: themeTextStyle(context)),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            'Aucune conversation n\u2019a \u00e9t\u00e9 escalad\u00e9e pour le moment.',
+            Strings.noConversationsBody,
             style: context.theme.textTheme.bodyMedium?.copyWith(
               color: scheme.onSurfaceVariant,
             ),
@@ -396,7 +408,7 @@ TextStyle themeTextStyle(BuildContext context) {
 class _StatRow extends StatelessWidget {
   const _StatRow({
     required this.openCount,
-    required this.closedCount,
+    required this.botCount,
     required this.under15,
     required this.total,
     required this.handledToday,
@@ -405,7 +417,7 @@ class _StatRow extends StatelessWidget {
   });
 
   final int openCount;
-  final int closedCount;
+  final int botCount;
   final int under15;
   final int total;
   final int handledToday;
@@ -432,11 +444,11 @@ class _StatRow extends StatelessWidget {
             const SizedBox(width: AppSpacing.md),
             Expanded(
               child: _StatCard(
-                title: Strings.closedEscalations,
-                value: closedCount,
-                delta: 'r\u00e9solues',
+                title: Strings.botSection,
+                value: botCount,
+                delta: 'sans intervention',
                 color: scheme.primary,
-                icon: Icons.check_circle_outline,
+                icon: Icons.smart_toy_outlined,
               ),
             ),
           ],
@@ -448,7 +460,7 @@ class _StatRow extends StatelessWidget {
               child: _StatCard(
                 title: 'Total',
                 value: total,
-                delta: 'escalades',
+                delta: 'conversations',
                 color: scheme.primary,
                 icon: Icons.list_alt,
               ),
@@ -635,7 +647,7 @@ class _QuickActions extends StatelessWidget {
       children: [
         _ActionTile(
           icon: Icons.list_alt,
-          label: 'Voir les escalades',
+          label: 'Boîte de réception',
           color: scheme.primary,
           glow: AppColors.lightPrimaryGlow,
           onTap: onViewEscalations,
@@ -645,7 +657,7 @@ class _QuickActions extends StatelessWidget {
           label: 'Actualiser',
           color: AppColors.alertAmber,
           glow: AppColors.lightAmberGlow,
-          onTap: () => context.read<EscalationsCubit>().load(),
+          onTap: () => context.read<InboxCubit>().load(),
         ),
       ],
     );
@@ -725,14 +737,14 @@ class _RecentList extends StatelessWidget {
     required this.scheme,
   });
 
-  final List<Escalation> items;
+  final List<Conversation> items;
   final ThemeData theme;
   final ColorScheme scheme;
 
   @override
   Widget build(BuildContext context) {
-    final sorted = List<Escalation>.from(items)
-      ..sort((a, b) => b.escalatedAt.compareTo(a.escalatedAt));
+    final sorted = List<Conversation>.from(items)
+      ..sort((a, b) => b.sortAt.compareTo(a.sortAt));
     final recent = sorted.take(5).toList();
 
     return Column(
@@ -755,7 +767,7 @@ class _RecentRow extends StatelessWidget {
     required this.scheme,
   });
 
-  final Escalation item;
+  final Conversation item;
   final ThemeData theme;
   final ColorScheme scheme;
 
@@ -770,7 +782,15 @@ class _RecentRow extends StatelessWidget {
       item.senderId,
       platform: item.platform,
     );
-    final time = Strings.relativeTime(item.escalatedAt);
+    final at = item.lastSeen ?? item.escalatedAt;
+    final time = at == null
+        ? Strings.noRecentMessage
+        : Strings.relativeTime(at);
+    final (statusLabel, statusColor) = switch (item.status) {
+      'open' => (Strings.humanHandler, AppColors.alertAmber),
+      'active' => (Strings.botHandler, scheme.primary),
+      _ => (Strings.closed, scheme.onSurfaceVariant),
+    };
 
     return Container(
       decoration: BoxDecoration(
@@ -813,11 +833,7 @@ class _RecentRow extends StatelessWidget {
                   ),
                 ),
               ),
-            Positioned(
-              right: -4,
-              top: -4,
-              child: ChannelChip(item.platform),
-            ),
+            Positioned(right: -4, top: -4, child: ChannelChip(item.platform)),
           ],
         ),
         title: Text(
@@ -838,23 +854,17 @@ class _RecentRow extends StatelessWidget {
         trailing: Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
-            color: isOpen
-                ? AppColors.alertAmber.withValues(alpha: 0.12)
-                : scheme.surfaceContainerHigh,
+            color: statusColor.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-              color: isOpen
-                  ? AppColors.alertAmber.withValues(alpha: 0.35)
-                  : scheme.outlineVariant.withValues(alpha: 0.3),
+              color: statusColor.withValues(alpha: 0.35),
               width: 1,
             ),
           ),
           child: Text(
-            isOpen ? Strings.open : Strings.closed,
+            statusLabel,
             style: theme.textTheme.labelSmall?.copyWith(
-              color: isOpen
-                  ? AppColors.alertAmber
-                  : scheme.onSurfaceVariant,
+              color: statusColor,
               fontWeight: FontWeight.w600,
               fontSize: 10,
             ),
@@ -872,7 +882,7 @@ class _PriorityList extends StatelessWidget {
     required this.scheme,
   });
 
-  final List<Escalation> items;
+  final List<Conversation> items;
   final ThemeData theme;
   final ColorScheme scheme;
 
@@ -902,7 +912,7 @@ class _PriorityItem extends StatelessWidget {
   });
 
   final int index;
-  final Escalation item;
+  final Conversation item;
   final ThemeData theme;
   final ColorScheme scheme;
 
@@ -917,12 +927,20 @@ class _PriorityItem extends StatelessWidget {
       item.senderId,
       platform: item.platform,
     );
-    final minutes = DateTime.now().difference(item.escalatedAt).inMinutes;
-    final timeLabel = minutes < 60
+    final at = item.escalatedAt ?? item.lastSeen;
+    final minutes = at == null ? null : DateTime.now().difference(at).inMinutes;
+    final timeLabel = minutes == null
+        ? Strings.noRecentMessage
+        : minutes < 60
         ? 'il y a $minutes min'
         : (minutes ~/ 60 < 24
               ? 'il y a ${minutes ~/ 60} h'
               : 'il y a ${minutes ~/ 60 ~/ 24} j');
+    final detail = item.reason.trim().isNotEmpty
+        ? item.reason.trim()
+        : (item.lastMessage.trim().isNotEmpty
+              ? item.lastMessage.trim()
+              : Strings.noRecentMessage);
 
     return InkWell(
       onTap: () => context.push('/chat/${item.platform}/${item.senderId}'),
@@ -1032,7 +1050,7 @@ class _PriorityItem extends StatelessWidget {
                     ),
                     const SizedBox(height: AppSpacing.xs),
                     Text(
-                      item.reason,
+                      detail,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodyMedium?.copyWith(

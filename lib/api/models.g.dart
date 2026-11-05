@@ -21,6 +21,24 @@ Escalation _$EscalationFromJson(Map<String, dynamic> json) => Escalation(
   customerName: json['customer_name'] as String?,
 );
 
+Conversation _$ConversationFromJson(Map<String, dynamic> json) => Conversation(
+  senderId: json['sender_id'] as String,
+  platform: json['platform'] as String,
+  mode: $enumDecode(_$ChatModeEnumMap, json['mode']),
+  status: json['status'] as String,
+  customerName: json['customer_name'] as String?,
+  lastMessage: json['last_message'] as String? ?? '',
+  lastSeen: json['last_seen'] == null
+      ? null
+      : DateTime.parse(json['last_seen'] as String),
+  reason: json['reason'] as String? ?? '',
+  escalatedAt: json['escalated_at'] == null
+      ? null
+      : DateTime.parse(json['escalated_at'] as String),
+);
+
+const _$ChatModeEnumMap = {ChatMode.human: 'human', ChatMode.bot: 'bot'};
+
 ChatMessage _$ChatMessageFromJson(Map<String, dynamic> json) => ChatMessage(
   role: json['role'] as String,
   text: json['text'] as String,
@@ -37,5 +55,3 @@ Chat _$ChatFromJson(Map<String, dynamic> json) => Chat(
       .toList(),
   customerName: json['customer_name'] as String?,
 );
-
-const _$ChatModeEnumMap = {ChatMode.human: 'human', ChatMode.bot: 'bot'};

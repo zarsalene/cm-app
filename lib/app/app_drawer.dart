@@ -46,30 +46,12 @@ class AppDrawer extends StatelessWidget {
                   },
                 ),
                 _DrawerItem(
-                  icon: Icons.report_outlined,
-                  activeIcon: Icons.report,
-                  label: Strings.escalationsTitle,
+                  icon: Icons.inbox_outlined,
+                  activeIcon: Icons.inbox,
+                  label: Strings.inboxTitle,
                   onTap: () {
                     context.pop();
-                    context.go('/escalations');
-                  },
-                ),
-                _DrawerItem(
-                  icon: Icons.chat_bubble_outline,
-                  activeIcon: Icons.chat_bubble,
-                  label: 'Conversations',
-                  onTap: () {
-                    context.pop();
-                    context.go('/');
-                  },
-                ),
-                _DrawerItem(
-                  icon: Icons.notifications_outlined,
-                  activeIcon: Icons.notifications,
-                  label: 'Alertes',
-                  onTap: () {
-                    context.pop();
-                    context.go('/');
+                    context.go('/inbox');
                   },
                 ),
                 const Divider(height: 1),

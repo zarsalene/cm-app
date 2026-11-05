@@ -7,9 +7,9 @@ import 'package:cm_app/auth/auth_bloc.dart';
 import 'package:cm_app/auth/login_page.dart';
 import 'package:cm_app/chat/chat_cubit.dart';
 import 'package:cm_app/chat/chat_page.dart';
-import 'package:cm_app/escalations/escalations_cubit.dart';
-import 'package:cm_app/escalations/escalations_page.dart';
 import 'package:cm_app/help/help_page.dart';
+import 'package:cm_app/inbox/inbox_cubit.dart';
+import 'package:cm_app/inbox/inbox_page.dart';
 import 'package:cm_app/push/push_service.dart';
 import 'package:cm_app/profile/profile_page.dart';
 import 'package:cm_app/settings/settings_page.dart';
@@ -101,7 +101,7 @@ GoRouter createRouter(
         path: '/',
         builder: (context, state) => BlocProvider(
           create: (_) {
-            final cubit = EscalationsCubit(
+            final cubit = InboxCubit(
               api,
               onUnauthorized: onUnauthorized,
               push: push,
@@ -113,10 +113,10 @@ GoRouter createRouter(
         ),
       ),
       GoRoute(
-        path: '/escalations',
+        path: '/inbox',
         builder: (context, state) => BlocProvider(
           create: (_) {
-            final cubit = EscalationsCubit(
+            final cubit = InboxCubit(
               api,
               onUnauthorized: onUnauthorized,
               push: push,
@@ -124,9 +124,11 @@ GoRouter createRouter(
             unawaited(cubit.load());
             return cubit;
           },
-          child: const EscalationsPage(),
+          child: const InboxPage(),
         ),
       ),
+      // Kept for old push payloads and bookmarks.
+      GoRoute(path: '/escalations', redirect: (context, state) => '/inbox'),
       GoRoute(
         path: '/chat/:platform/:senderId',
         builder: (context, state) => BlocProvider(

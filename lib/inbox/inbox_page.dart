@@ -5,25 +5,33 @@ import 'package:cm_app/app/channel_chip.dart';
 import 'package:cm_app/app/motion_widgets.dart';
 import 'package:cm_app/app/strings.dart';
 import 'package:cm_app/app/theme.dart';
-import 'package:cm_app/auth/token_store.dart';
-import 'package:cm_app/escalations/escalations_cubit.dart';
+import 'package:cm_app/inbox/inbox_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
-/// Sort order for the escalation list.
+/// Sort order for the inbox.
 enum _SortOrder { newestFirst, oldestFirst }
 
-class EscalationsPage extends StatefulWidget {
-  const EscalationsPage({super.key});
+/// Which handler the user wants to see.
+enum _ModeFilter { all, human, bot }
+
+/// Unified WhatsApp + Facebook inbox.
+///
+/// Every row is a real conversation from `sales_bot_user_ai_control`; rows
+/// that also have an escalation show its reason and status. The bot/human
+/// switch writes `sales_bot_user_ai_control` directly, so it works with or
+/// without an escalation.
+class InboxPage extends StatefulWidget {
+  const InboxPage({super.key});
 
   @override
-  State<EscalationsPage> createState() => _EscalationsPageState();
+  State<InboxPage> createState() => _InboxPageState();
 }
 
-class _EscalationsPageState extends State<EscalationsPage>
+class _InboxPageState extends State<InboxPage>
     with WidgetsBindingObserver, SingleTickerProviderStateMixin {
-  late final EscalationsCubit _cubit = context.read<EscalationsCubit>();
+  late final InboxCubit _cubit = context.read<InboxCubit>();
   late final AnimationController _liveIcon = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 250),
@@ -31,6 +39,7 @@ class _EscalationsPageState extends State<EscalationsPage>
   bool _live = true;
   String _query = '';
   String? _channel;
+  _ModeFilter _mode = _ModeFilter.all;
   _SortOrder _sort = _SortOrder.newestFirst;
   Timer? _debounce;
 
@@ -104,11 +113,15 @@ class _EscalationsPageState extends State<EscalationsPage>
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              Strings.escalationsTitle,
-              style: context.theme.textTheme.titleLarge?.copyWith(
-                fontSize: 19,
-                fontWeight: FontWeight.w700,
+            Flexible(
+              child: Text(
+                Strings.inboxTitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: context.theme.textTheme.titleLarge?.copyWith(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
             if (_live) ...[
@@ -118,6 +131,11 @@ class _EscalationsPageState extends State<EscalationsPage>
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: Strings.refresh,
+            icon: const Icon(Icons.refresh),
+            onPressed: () => context.read<InboxCubit>().load(),
+          ),
           IconButton(
             tooltip: _live ? Strings.pauseLive : Strings.resumeLive,
             icon: AnimatedIcon(
@@ -135,13 +153,20 @@ class _EscalationsPageState extends State<EscalationsPage>
             const _OfflineNotice(),
             _FilterBar(
               channel: _channel,
+              mode: _mode,
               sortOrder: _sort,
               onQuery: _onQueryChanged,
               onChannel: (c) => setState(() => _channel = c),
+              onMode: (m) => setState(() => _mode = m),
               onSort: (s) => setState(() => _sort = s),
             ),
             Expanded(
-              child: _List(query: _query, channel: _channel, sortOrder: _sort),
+              child: _List(
+                query: _query,
+                channel: _channel,
+                mode: _mode,
+                sortOrder: _sort,
+              ),
             ),
           ],
         ),
@@ -153,16 +178,20 @@ class _EscalationsPageState extends State<EscalationsPage>
 class _FilterBar extends StatelessWidget {
   const _FilterBar({
     required this.channel,
+    required this.mode,
     required this.sortOrder,
     required this.onQuery,
     required this.onChannel,
+    required this.onMode,
     required this.onSort,
   });
 
   final String? channel;
+  final _ModeFilter mode;
   final _SortOrder sortOrder;
   final ValueChanged<String> onQuery;
   final ValueChanged<String?> onChannel;
+  final ValueChanged<_ModeFilter> onMode;
   final ValueChanged<_SortOrder> onSort;
 
   @override
@@ -204,11 +233,31 @@ class _FilterBar extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: AppSpacing.md),
+                ...[
+                  (_ModeFilter.all, Strings.allConversations),
+                  (_ModeFilter.human, Strings.humanHandler),
+                  (_ModeFilter.bot, Strings.botHandler),
+                ].map(
+                  (entry) => ChoiceChip(
+                    label: Text(entry.$2),
+                    selected: mode == entry.$1,
+                    onSelected: (_) => onMode(entry.$1),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.xs,
+              children: [
                 const Text(
                   Strings.trier,
                   style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                 ),
-                const SizedBox(width: AppSpacing.xs),
                 ChoiceChip(
                   label: Text(Strings.sortNewestFirst),
                   selected: sortOrder == _SortOrder.newestFirst,
@@ -259,31 +308,36 @@ class _List extends StatelessWidget {
   const _List({
     required this.query,
     required this.channel,
+    required this.mode,
     required this.sortOrder,
   });
 
   final String query;
   final String? channel;
+  final _ModeFilter mode;
   final _SortOrder sortOrder;
 
-  bool _matches(Escalation e) {
-    if (channel != null && e.platform != channel) return false;
+  bool _matches(Conversation c) {
+    if (channel != null && c.platform != channel) return false;
+    if (mode == _ModeFilter.human && c.mode != ChatMode.human) return false;
+    if (mode == _ModeFilter.bot && c.mode != ChatMode.bot) return false;
     if (query.isEmpty) return true;
     return [
-      e.customerName ?? '',
-      e.senderId,
-      e.reason,
+      c.customerName ?? '',
+      c.senderId,
+      c.reason,
+      c.lastMessage,
     ].any((text) => text.toLowerCase().contains(query));
   }
 
-  List<Escalation> _sortAndFilter(List<Escalation> items) {
+  List<Conversation> _sortAndFilter(List<Conversation> items) {
     final filtered = items.where(_matches).toList();
     filtered.sort((a, b) {
       switch (sortOrder) {
         case _SortOrder.newestFirst:
-          return b.escalatedAt.compareTo(a.escalatedAt);
+          return b.sortAt.compareTo(a.sortAt);
         case _SortOrder.oldestFirst:
-          return a.escalatedAt.compareTo(b.escalatedAt);
+          return a.sortAt.compareTo(b.sortAt);
       }
     });
     return filtered;
@@ -291,42 +345,54 @@ class _List extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<EscalationsCubit, EscalationsState>(
+    return BlocBuilder<InboxCubit, InboxState>(
       builder: (context, state) {
-        if (state.items.isEmpty && state.loading) {
+        if (state.conversations.isEmpty && state.loading) {
           return const _SkeletonList();
         }
-        final items = _sortAndFilter(state.items);
+        final items = _sortAndFilter(state.conversations);
+        final open = items.where((i) => i.status == 'open').toList();
+        final active = items.where((i) => i.status == 'active').toList();
+        final closed = items.where((i) => i.status == 'closed').toList();
+
         return RefreshIndicator(
-          onRefresh: () => context.read<EscalationsCubit>().load(),
+          onRefresh: () => context.read<InboxCubit>().load(),
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
             children: [
               if (state.error case final error?) _ErrorBanner(error: error),
-              if (state.items.isEmpty && state.error == null)
+              if (state.conversations.isEmpty && state.error == null)
                 const Padding(
                   padding: EdgeInsets.all(AppSpacing.pageGutter),
                   child: _EmptyState(),
                 ),
-              if (state.items.isNotEmpty && items.isEmpty) const _NoResults(),
-              if (items.isNotEmpty) ...[
-                if (items.any((i) => i.status == 'open')) ...[
-                  _Section(
-                    title: Strings.openSection,
-                    count: items.where((i) => i.status == 'open').length,
-                  ),
-                  for (final item in items.where((i) => i.status == 'open'))
-                    _Row(item: item),
-                ],
-                if (items.any((i) => i.status == 'closed')) ...[
-                  _Section(
-                    title: Strings.closedSection,
-                    count: items.where((i) => i.status == 'closed').length,
-                  ),
-                  for (final item in items.where((i) => i.status == 'closed'))
-                    _Row(item: item),
-                ],
+              if (state.conversations.isNotEmpty && items.isEmpty)
+                const _NoResults(),
+              if (open.isNotEmpty) ...[
+                _SectionHeader(
+                  title: Strings.humanSection,
+                  count: open.length,
+                  color: AppColors.alertAmber,
+                ),
+                for (final item in open) _ConversationRow(item: item),
               ],
+              if (active.isNotEmpty) ...[
+                _SectionHeader(
+                  title: Strings.botSection,
+                  count: active.length,
+                  color: context.scheme.primary,
+                ),
+                for (final item in active) _ConversationRow(item: item),
+              ],
+              if (closed.isNotEmpty) ...[
+                _SectionHeader(
+                  title: Strings.closedConversations,
+                  count: closed.length,
+                  color: context.scheme.onSurfaceVariant,
+                ),
+                for (final item in closed) _ConversationRow(item: item),
+              ],
+              const SizedBox(height: AppSpacing.xl),
             ],
           ),
         );
@@ -335,11 +401,16 @@ class _List extends StatelessWidget {
   }
 }
 
-class _Section extends StatelessWidget {
-  const _Section({required this.title, required this.count});
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({
+    required this.title,
+    required this.count,
+    required this.color,
+  });
 
   final String title;
   final int count;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
@@ -356,7 +427,7 @@ class _Section extends StatelessWidget {
             width: 4,
             height: 18,
             decoration: BoxDecoration(
-              color: AppColors.alertAmber,
+              color: color,
               borderRadius: BorderRadius.circular(9),
             ),
           ),
@@ -373,16 +444,17 @@ class _Section extends StatelessWidget {
   }
 }
 
-class _Row extends StatefulWidget {
-  const _Row({required this.item});
+class _ConversationRow extends StatefulWidget {
+  const _ConversationRow({required this.item});
 
-  final Escalation item;
+  final Conversation item;
 
   @override
-  State<_Row> createState() => _RowState();
+  State<_ConversationRow> createState() => _ConversationRowState();
 }
 
-class _RowState extends State<_Row> with SingleTickerProviderStateMixin {
+class _ConversationRowState extends State<_ConversationRow>
+    with SingleTickerProviderStateMixin {
   bool _pushing = false;
   late final AnimationController _enterController;
   late final Animation<double> _opacity;
@@ -412,24 +484,31 @@ class _RowState extends State<_Row> with SingleTickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final item = widget.item;
-    final isOpen = item.status == 'open';
-    final channel = item.platform == 'whatsapp'
-        ? Strings.whatsapp
-        : Strings.facebook;
+    final scheme = context.scheme;
     final name = Strings.customerLabel(
       item.customerName,
       item.senderId,
       platform: item.platform,
     );
-    final time = Strings.relativeTime(item.escalatedAt);
-    final under15 = DateTime.now().difference(item.escalatedAt).inMinutes < 15;
+    final hasName = (item.customerName ?? '').trim().isNotEmpty;
+    final isOpen = item.status == 'open';
+    final isBot = item.status == 'active';
+    final toggling = context.select<InboxCubit, bool>(
+      (c) => c.state.toggling.contains(_key(item)),
+    );
+    final preview = item.lastMessage.trim().isNotEmpty
+        ? item.lastMessage.trim()
+        : (item.reason.trim().isNotEmpty
+              ? item.reason.trim()
+              : Strings.noRecentMessage);
+    final hasTime = item.lastSeen != null || item.escalatedAt != null;
 
     return Semantics(
       button: true,
       excludeSemantics: true,
       label:
-          '$name, $channel, ${item.reason}, $time, '
-          '${isOpen ? Strings.open : Strings.closed}',
+          '$name, ${item.platform == 'whatsapp' ? Strings.whatsapp : Strings.facebook}, '
+          '$preview, ${isOpen ? Strings.humanHandler : (isBot ? Strings.botHandler : Strings.closed)}',
       onTap: () => _open(context),
       child: FadeTransition(
         opacity: _opacity,
@@ -443,25 +522,26 @@ class _RowState extends State<_Row> with SingleTickerProviderStateMixin {
                 vertical: AppSpacing.vertical8,
               ),
               decoration: BoxDecoration(
-                color: context.scheme.surfaceContainer,
+                color: scheme.surfaceContainer,
                 borderRadius: BorderRadius.all(Radius.circular(AppRadius.card)),
                 border: isOpen
-                    ? BorderDirectional(
+                    ? const BorderDirectional(
                         start: BorderSide(
                           color: AppColors.alertAmber,
                           width: 4,
                         ),
                       )
                     : Border.all(
-                        color: context.scheme.outlineVariant,
+                        color: scheme.outlineVariant.withValues(alpha: 0.5),
                         width: 1,
                       ),
+                boxShadow: [AppShadow.card],
               ),
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(
                   AppSpacing.innerCardPadding,
                   AppSpacing.vertical12,
-                  AppSpacing.innerCardPadding,
+                  AppSpacing.sm,
                   AppSpacing.vertical12,
                 ),
                 child: Row(
@@ -472,14 +552,20 @@ class _RowState extends State<_Row> with SingleTickerProviderStateMixin {
                       children: [
                         CircleAvatar(
                           radius: 22,
-                          backgroundColor: context.scheme.primaryContainer,
-                          child: Text(
-                            _initials(name),
-                            style: context.theme.textTheme.bodyMedium?.copyWith(
-                              color: context.scheme.onPrimaryContainer,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
+                          backgroundColor: scheme.primaryContainer,
+                          child: hasName
+                              ? Text(
+                                  _initials(name),
+                                  style: context.theme.textTheme.bodyMedium
+                                      ?.copyWith(
+                                        color: scheme.onPrimaryContainer,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                )
+                              : Icon(
+                                  Icons.person_outline,
+                                  color: scheme.onPrimaryContainer,
+                                ),
                         ),
                         if (isOpen)
                           Positioned(
@@ -488,7 +574,7 @@ class _RowState extends State<_Row> with SingleTickerProviderStateMixin {
                             child: Container(
                               width: 10,
                               height: 10,
-                              decoration: BoxDecoration(
+                              decoration: const BoxDecoration(
                                 color: AppColors.alertAmber,
                                 shape: BoxShape.circle,
                               ),
@@ -506,58 +592,59 @@ class _RowState extends State<_Row> with SingleTickerProviderStateMixin {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: context.theme.textTheme.titleMedium
-                                ?.copyWith(
-                                  fontWeight: isOpen
-                                      ? FontWeight.w700
-                                      : FontWeight.w600,
-                                  color: isOpen
-                                      ? context.scheme.onSurface
-                                      : context.scheme.onSurfaceVariant,
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: context.theme.textTheme.titleMedium
+                                      ?.copyWith(
+                                        fontWeight: isOpen
+                                            ? FontWeight.w700
+                                            : FontWeight.w600,
+                                        color: isOpen
+                                            ? scheme.onSurface
+                                            : scheme.onSurfaceVariant,
+                                      ),
                                 ),
+                              ),
+                              if (hasTime) ...[
+                                const SizedBox(width: AppSpacing.xs),
+                                Text(
+                                  Strings.relativeTime(item.sortAt),
+                                  style: context.theme.textTheme.labelSmall
+                                      ?.copyWith(
+                                        color: scheme.onSurfaceVariant,
+                                      ),
+                                ),
+                              ],
+                            ],
                           ),
                           const SizedBox(height: AppSpacing.xs),
                           Text(
-                            item.reason,
+                            preview,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: context.theme.textTheme.bodyMedium?.copyWith(
-                              color: context.scheme.onSurfaceVariant,
+                              color: scheme.onSurfaceVariant,
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(width: AppSpacing.sm),
+                    const SizedBox(width: AppSpacing.xs),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.sm,
-                            vertical: AppSpacing.xs,
-                          ),
-                          decoration: BoxDecoration(
-                            color: under15 && isOpen
-                                ? AppColors.alertAmber
-                                : context.scheme.surfaceContainerHigh,
-                            borderRadius: BorderRadius.all(
-                              Radius.circular(AppRadius.bubble),
-                            ),
-                          ),
-                          child: Text(
-                            time,
-                            style: context.theme.textTheme.labelSmall?.copyWith(
-                              color: under15 && isOpen
-                                  ? Colors.black
-                                  : context.scheme.onSurfaceVariant,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
+                        _StatusChip(item: item),
+                        const SizedBox(height: AppSpacing.xs),
+                        _ToggleButton(
+                          item: item,
+                          toggling: toggling,
+                          onTakeOver: () => _takeOver(context),
+                          onGiveBack: () => _confirmGiveBack(context),
                         ),
                       ],
                     ),
@@ -585,7 +672,7 @@ class _RowState extends State<_Row> with SingleTickerProviderStateMixin {
   Future<void> _open(BuildContext context) async {
     if (_pushing) return;
     _pushing = true;
-    final cubit = context.read<EscalationsCubit>();
+    final cubit = context.read<InboxCubit>();
     final sender = Uri.encodeComponent(widget.item.senderId);
     try {
       await context.push('/chat/${widget.item.platform}/$sender');
@@ -595,6 +682,107 @@ class _RowState extends State<_Row> with SingleTickerProviderStateMixin {
     if (cubit.isClosed) return;
     await cubit.load();
   }
+
+  void _takeOver(BuildContext context) {
+    context.read<InboxCubit>().setAiMode(widget.item, ChatMode.human);
+  }
+
+  Future<void> _confirmGiveBack(BuildContext context) async {
+    final cubit = context.read<InboxCubit>();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text(Strings.giveBackTitle),
+        content: const Text(Strings.giveBackBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text(Strings.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text(Strings.confirm),
+          ),
+        ],
+      ),
+    );
+    if (ok == true && !cubit.isClosed) {
+      await cubit.setAiMode(widget.item, ChatMode.bot);
+    }
+  }
+
+  static String _key(Conversation c) => '${c.platform}/${c.senderId}';
+}
+
+class _StatusChip extends StatelessWidget {
+  const _StatusChip({required this.item});
+
+  final Conversation item;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.scheme;
+    final (label, color) = switch (item.status) {
+      'open' => (Strings.humanHandler, AppColors.alertAmber),
+      'active' => (Strings.botHandler, scheme.primary),
+      _ => (Strings.closed, scheme.onSurfaceVariant),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: 2,
+      ),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(AppRadius.chip),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Text(
+        label,
+        style: context.theme.textTheme.labelSmall?.copyWith(
+          color: color,
+          fontWeight: FontWeight.w700,
+          fontSize: 10,
+        ),
+      ),
+    );
+  }
+}
+
+class _ToggleButton extends StatelessWidget {
+  const _ToggleButton({
+    required this.item,
+    required this.toggling,
+    required this.onTakeOver,
+    required this.onGiveBack,
+  });
+
+  final Conversation item;
+  final bool toggling;
+  final VoidCallback onTakeOver;
+  final VoidCallback onGiveBack;
+
+  @override
+  Widget build(BuildContext context) {
+    if (toggling) {
+      return const SizedBox(
+        width: 32,
+        height: 32,
+        child: Padding(
+          padding: EdgeInsets.all(8),
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      );
+    }
+    final human = item.mode == ChatMode.human;
+    return IconButton(
+      tooltip: human ? Strings.activateBot : Strings.takeOver,
+      visualDensity: VisualDensity.compact,
+      iconSize: 20,
+      icon: Icon(human ? Icons.smart_toy_outlined : Icons.person_outline),
+      onPressed: human ? onGiveBack : onTakeOver,
+    );
+  }
 }
 
 class _SkeletonList extends StatelessWidget {
@@ -603,7 +791,7 @@ class _SkeletonList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView.builder(
-      itemCount: 3,
+      itemCount: 4,
       itemBuilder: (context, i) => const _SkeletonRow(),
     );
   }
@@ -662,14 +850,6 @@ class _SkeletonRow extends StatelessWidget {
                 ],
               ),
             ),
-            Container(
-              width: 60,
-              height: 20,
-              decoration: BoxDecoration(
-                color: scheme.surfaceContainerHigh,
-                borderRadius: BorderRadius.circular(AppRadius.bubble),
-              ),
-            ),
           ],
         ),
       ),
@@ -694,14 +874,14 @@ class _EmptyState extends StatelessWidget {
             shape: BoxShape.circle,
           ),
           child: Icon(
-            Icons.mark_chat_read_rounded,
+            Icons.forum_outlined,
             size: 40,
             color: scheme.onPrimaryContainer,
           ),
         ),
         const SizedBox(height: AppSpacing.vertical16),
         Text(
-          Strings.noEscalations,
+          Strings.noConversations,
           style: context.theme.textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.w700,
             color: scheme.onSurface,
@@ -710,7 +890,7 @@ class _EmptyState extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.xs),
         Text(
-          'Aucune conversation n’a été escaladée pour le moment.',
+          Strings.noConversationsBody,
           style: context.theme.textTheme.bodyMedium?.copyWith(
             color: scheme.onSurfaceVariant,
           ),
@@ -726,7 +906,7 @@ class _NotificationsBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final off = context.select<EscalationsCubit, bool>(
+    final off = context.select<InboxCubit, bool>(
       (c) => c.state.notificationsOff,
     );
     if (!off) return const SizedBox.shrink();
@@ -773,9 +953,7 @@ class _OfflineNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final offline = context.select<EscalationsCubit, bool>(
-      (c) => c.state.offline,
-    );
+    final offline = context.select<InboxCubit, bool>((c) => c.state.offline);
     if (!offline) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.symmetric(
@@ -839,7 +1017,7 @@ class _ErrorBanner extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.sm),
           FilledButton(
-            onPressed: () => context.read<EscalationsCubit>().load(),
+            onPressed: () => context.read<InboxCubit>().load(),
             child: const Text(Strings.retry),
           ),
         ],

@@ -35,7 +35,11 @@ void main() {
                 .thenThrow(const InvalidLoginException()),
         build: () => AuthBloc(api, store, push),
         act: (bloc) => bloc.add(
-          const LoginSubmitted(username: 'cm', password: 'wrong', rememberMe: false),
+          const LoginSubmitted(
+            username: 'cm',
+            password: 'wrong',
+            rememberMe: false,
+          ),
         ),
         expect: () => const [
           LoginInProgress(),

@@ -75,7 +75,10 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
-    final sending = context.select<ChatCubit, bool>((c) => c.state.sending);
+    final busy = context.select<ChatCubit, bool>(
+      (c) => c.state.sending || c.state.switching,
+    );
+    final switching = context.select<ChatCubit, bool>((c) => c.state.switching);
     final resolvedName = chat?.customerName;
     return AppBar(
       // Opened from a push alert there is nothing to pop: go to the list.
@@ -83,7 +86,7 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
         tooltip: Strings.back,
         icon: const Icon(Icons.arrow_back),
         onPressed: () =>
-            context.canPop() ? context.pop() : context.go('/escalations'),
+            context.canPop() ? context.pop() : context.go('/inbox'),
       ),
       title: Text(
         chat == null
@@ -102,15 +105,35 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
       actions: [
         if (chat != null) ...[
           Padding(
-            padding: const EdgeInsets.only(right: AppSpacing.md),
+            padding: const EdgeInsets.only(right: AppSpacing.sm),
             child: ChannelChip(chat!.platform),
           ),
-          if (chat!.mode == ChatMode.human && !sending)
-            IconButton(
-              tooltip: Strings.giveBack,
-              icon: const Icon(Icons.handshake_outlined),
-              onPressed: () => _confirmGiveBack(context),
-            ),
+          IconButton(
+            tooltip: chat!.mode == ChatMode.human
+                ? Strings.activateBot
+                : Strings.takeOver,
+            icon: switching
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Icon(
+                    chat!.mode == ChatMode.human
+                        ? Icons.smart_toy_outlined
+                        : Icons.person_outline,
+                  ),
+            onPressed: busy
+                ? null
+                : () {
+                    if (chat!.mode == ChatMode.human) {
+                      _confirmGiveBack(context);
+                    } else {
+                      context.read<ChatCubit>().setAiMode(ChatMode.human);
+                    }
+                  },
+          ),
+          const SizedBox(width: AppSpacing.xs),
         ],
       ],
     );
@@ -201,22 +224,23 @@ class _ConversationState extends State<_Conversation> {
 
     return Column(
       children: [
-        ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(context).height * 0.25,
-          ),
-          child: SingleChildScrollView(
-            child: Semantics(
-              container: true,
-              child: _ReasonCard(
-                chat: chat,
-                expanded: _reasonExpanded,
-                onToggle: () =>
-                    setState(() => _reasonExpanded = !_reasonExpanded),
+        if (chat.reason.trim().isNotEmpty)
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * 0.25,
+            ),
+            child: SingleChildScrollView(
+              child: Semantics(
+                container: true,
+                child: _ReasonCard(
+                  chat: chat,
+                  expanded: _reasonExpanded,
+                  onToggle: () =>
+                      setState(() => _reasonExpanded = !_reasonExpanded),
+                ),
               ),
             ),
           ),
-        ),
         Expanded(child: _MessageList(messages: chat.messages)),
         if (error != null)
           Padding(
@@ -982,6 +1006,7 @@ class _BotActiveCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = context.scheme;
+    final switching = context.select<ChatCubit, bool>((c) => c.state.switching);
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
@@ -989,21 +1014,40 @@ class _BotActiveCard extends StatelessWidget {
         borderRadius: BorderRadius.all(Radius.circular(AppRadius.card)),
         border: Border.all(color: scheme.outlineVariant, width: 1),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Icon(
-            Icons.person_outlined,
-            color: scheme.onPrimaryContainer,
-            size: 24,
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Text(
-              Strings.botAnswersAgain,
-              style: context.theme.textTheme.bodyMedium?.copyWith(
+          Row(
+            children: [
+              Icon(
+                Icons.smart_toy_outlined,
                 color: scheme.onPrimaryContainer,
+                size: 24,
               ),
-            ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  Strings.botAnswersAgain,
+                  style: context.theme.textTheme.bodyMedium?.copyWith(
+                    color: scheme.onPrimaryContainer,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          FilledButton.tonalIcon(
+            onPressed: switching
+                ? null
+                : () => context.read<ChatCubit>().setAiMode(ChatMode.human),
+            icon: switching
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.person_outline, size: 18),
+            label: const Text(Strings.takeOver),
           ),
         ],
       ),
