@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:developer';
+import 'dart:ui';
 
 import 'package:bloc/bloc.dart';
 import 'package:cm_app/core/error/error_boundary.dart';
@@ -35,6 +36,13 @@ Future<void> bootstrap(
 ) async {
   FlutterError.onError = (details) {
     log(details.exceptionAsString(), stackTrace: details.stack);
+  };
+
+  // Async errors outside the widget tree (a failed fire-and-forget call)
+  // would otherwise end up unlogged. `true` = handled, the app keeps running.
+  PlatformDispatcher.instance.onError = (error, stack) {
+    log('Uncaught: ${error.runtimeType}', stackTrace: stack);
+    return true;
   };
 
   Bloc.observer = const AppBlocObserver();

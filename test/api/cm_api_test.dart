@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:cm_app/api/cm_api.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -93,6 +94,15 @@ void main() {
       'platform': 'whatsapp',
       'mode': 'human',
     });
+  });
+
+  test('a TLS failure surfaces as NetworkException', () {
+    final api = CmApi(
+      MockClient((_) async => throw const HandshakeException('bad cert')),
+      token: () async => 'tok',
+    );
+
+    expect(api.conversations(), throwsA(isA<NetworkException>()));
   });
 
   test('setAiMode() rejects an unknown mode', () async {

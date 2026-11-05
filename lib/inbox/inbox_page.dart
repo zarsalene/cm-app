@@ -661,12 +661,9 @@ class _ConversationRowState extends State<_ConversationRow>
   String _initials(String name) {
     final parts = name.trim().split(RegExp(r'\s+'));
     if (parts.length >= 2) {
-      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+      return Strings.initial(parts[0]) + Strings.initial(parts[1]);
     }
-    if (parts.isNotEmpty && parts[0].isNotEmpty) {
-      return parts[0][0].toUpperCase();
-    }
-    return '?';
+    return Strings.initial(parts[0]);
   }
 
   Future<void> _open(BuildContext context) async {

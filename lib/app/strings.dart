@@ -165,6 +165,11 @@ abstract class Strings {
     return '$customer $channel …$tail';
   }
 
+  /// First letter of [name], upper case, or `?` when empty. Works on runes:
+  /// `name[0]` would cut an emoji in half.
+  static String initial(String name) =>
+      name.isEmpty ? '?' : String.fromCharCode(name.runes.first).toUpperCase();
+
   /// "il y a 5 min", "il y a 2 h", "il y a 3 j".
   static String relativeTime(DateTime at, {DateTime? now}) {
     final diff = (now ?? DateTime.now()).difference(at);

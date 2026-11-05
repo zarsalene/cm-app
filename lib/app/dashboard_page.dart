@@ -1,12 +1,9 @@
-import 'dart:async';
-
 import 'package:cm_app/app/app_drawer.dart';
 import 'package:cm_app/app/channel_chip.dart';
 import 'package:cm_app/app/motion_widgets.dart';
 import 'package:cm_app/app/strings.dart';
 import 'package:cm_app/app/theme.dart';
 import 'package:cm_app/api/models.dart';
-import 'package:cm_app/auth/token_store.dart';
 import 'package:cm_app/inbox/inbox_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -489,12 +486,10 @@ class _StatCard extends StatelessWidget {
     required this.delta,
     required this.color,
     required this.icon,
-    this.suffix = '',
   });
 
   final String title;
   final int value;
-  final String suffix;
   final String delta;
   final Color color;
   final IconData icon;
@@ -542,7 +537,7 @@ class _StatCard extends StatelessWidget {
             duration: still ? Duration.zero : const Duration(milliseconds: 900),
             curve: Curves.easeOutCubic,
             builder: (context, v, _) => Text(
-              '$v$suffix',
+              '$v',
               style: theme.textTheme.headlineSmall?.copyWith(
                 fontWeight: FontWeight.w800,
                 color: scheme.onSurface,
@@ -809,7 +804,7 @@ class _RecentRow extends StatelessWidget {
               radius: 22,
               backgroundColor: scheme.primaryContainer,
               child: Text(
-                name.isNotEmpty ? name[0].toUpperCase() : '?',
+                Strings.initial(name),
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: scheme.onPrimaryContainer,
                   fontWeight: FontWeight.w700,
@@ -918,7 +913,6 @@ class _PriorityItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isOpen = item.status == 'open';
     final channel = item.platform == 'whatsapp'
         ? Strings.whatsapp
         : Strings.facebook;

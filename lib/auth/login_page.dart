@@ -33,7 +33,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
       duration: const Duration(milliseconds: 900),
     );
     _fade = CurvedAnimation(parent: _fadeController, curve: Curves.easeOut);
-    _slide = Tween<Offset>(begin: const Offset(0, 16), end: Offset.zero)
+    _slide = Tween<Offset>(begin: const Offset(0, 0.04), end: Offset.zero)
         .animate(
           CurvedAnimation(
             parent: _fadeController,

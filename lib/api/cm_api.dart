@@ -158,7 +158,8 @@ class CmApi {
             body: jsonEncode({'action': action, ...extra}),
           )
           .timeout(_timeout);
-    } on SocketException {
+    } on IOException {
+      // Includes SocketException and TLS handshake failures.
       throw const NetworkException();
     } on http.ClientException {
       throw const NetworkException();

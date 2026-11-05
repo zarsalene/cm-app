@@ -90,24 +90,21 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
   Future<void> _onStarted(AuthStarted event, Emitter<AuthState> emit) async {
     if (kDebugMode) log('AuthBloc._onStarted: restoring session');
-    // If the user didn't check "Remember me", never auto-restore the session.
-    final rememberMe = await _store.readRememberMe();
-    if (!rememberMe) {
-      if (kDebugMode) log('AuthBloc._onStarted: remember me is false');
-      emit(const Unauthenticated());
-      return;
-    }
-
+    var rememberMe = false;
     String? token;
     String? username;
     try {
-      token = await _store.read().timeout(_storageTimeout);
-      username = await _store.readUsername().timeout(_storageTimeout);
+      // If the user didn't check "Remember me", never auto-restore.
+      rememberMe = await _store.readRememberMe().timeout(_storageTimeout);
+      if (rememberMe) {
+        token = await _store.read().timeout(_storageTimeout);
+        username = await _store.readUsername().timeout(_storageTimeout);
+      }
     } on Object {
       // Unreadable or stuck secure storage: ask for a new login.
       if (kDebugMode) log('AuthBloc._onStarted: storage read failed');
     }
-    if (token == null || username == null) {
+    if (!rememberMe || token == null || username == null) {
       if (kDebugMode) log('AuthBloc._onStarted: no token or username');
       emit(const Unauthenticated());
       return;

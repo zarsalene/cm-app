@@ -8,7 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 ///   - `system`  — follow the OS setting
 ///   - `light`   — always light
 ///   - `dark`    — always dark
-class ThemeModeService {
+class ThemeModeService extends ChangeNotifier {
   static const _key = 'cm_theme_mode';
 
   ThemeModeService(this._prefs);
@@ -34,6 +34,8 @@ class ThemeModeService {
       ThemeMode.system => 'system',
     };
     await _prefs.setString(_key, value);
+    // The app listens: without this the new theme shows only after a restart.
+    notifyListeners();
   }
 
   /// The [Brightness] implied by [mode] given the platform brightness.

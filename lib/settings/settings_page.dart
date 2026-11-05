@@ -5,7 +5,6 @@ import 'package:cm_app/auth/token_store.dart';
 import 'package:cm_app/core/theme_mode_service.dart';
 import 'package:cm_app/push/push_service.dart';
 import 'package:cm_app/settings/settings_cubit.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -50,12 +49,9 @@ class _SettingsViewState extends State<_SettingsView> {
     if (mounted) setState(() => _storageWorking = working);
   }
 
-  Future<void> _resetSession() async {
-    final store = context.read<TokenStore>();
-    await store.delete();
-    if (!mounted) return;
-    context.read<SettingsCubit>().onLogoutRequested();
-  }
+  // Logout asks the server to end the session, then deletes the token. Deleting
+  // the token first would make that server call fail: the session stays valid.
+  void _resetSession() => context.read<SettingsCubit>().onLogoutRequested();
 
   @override
   Widget build(BuildContext context) {
@@ -201,7 +197,7 @@ class _SettingsViewState extends State<_SettingsView> {
 
   void _showThemePicker(BuildContext context, ThemeMode current) {
     final scheme = context.scheme;
-    showModalBottomSheet(
+    showModalBottomSheet<void>(
       context: context,
       builder: (context) => BlocBuilder<SettingsCubit, SettingsState>(
         builder: (context, state) {
@@ -298,7 +294,7 @@ class _SettingsViewState extends State<_SettingsView> {
         ),
       ),
     ).then((ok) {
-      if ((ok ?? false) && !kIsWeb) {
+      if ((ok ?? false) && context.mounted) {
         context.read<SettingsCubit>().onLogoutRequested();
       }
     });
@@ -356,9 +352,7 @@ class _SettingsViewState extends State<_SettingsView> {
         ),
       ),
     ).then((ok) {
-      if ((ok ?? false) && !kIsWeb) {
-        _resetSession();
-      }
+      if ((ok ?? false) && mounted) _resetSession();
     });
   }
 }

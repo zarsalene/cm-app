@@ -39,7 +39,7 @@ class ProfilePage extends StatelessWidget {
                   ),
                   child: Center(
                     child: Text(
-                      username.isNotEmpty ? username[0].toUpperCase() : '?',
+                      Strings.initial(username),
                       style: theme.textTheme.headlineMedium?.copyWith(
                         color: scheme.onPrimaryContainer,
                         fontWeight: FontWeight.w800,

@@ -27,6 +27,12 @@ void main() {
       });
     }
 
+    test('initial keeps an emoji whole and handles an empty name', () {
+      expect(Strings.initial('😀 Sana'), '😀');
+      expect(Strings.initial('sana'), 'S');
+      expect(Strings.initial(''), '?');
+    });
+
     test('keeps a short sender id whole', () {
       expect(
         Strings.customerLabel(null, '42', platform: 'whatsapp'),

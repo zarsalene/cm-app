@@ -17,6 +17,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
+import 'package:provider/provider.dart' show ChangeNotifierProvider;
 
 class App extends StatelessWidget {
   /// Null dependencies get the real ones; tests pass fakes.
@@ -55,7 +56,8 @@ class App extends StatelessWidget {
           create: (_) =>
               kDemo ? const NoopPushService() : push ?? const NoopPushService(),
         ),
-        RepositoryProvider<ThemeModeService>(create: (_) => themeMode),
+        // A Listenable: RepositoryProvider would reject it.
+        ChangeNotifierProvider<ThemeModeService>.value(value: themeMode),
       ],
       child: BlocProvider(
         create: (context) => AuthBloc(
@@ -188,8 +190,9 @@ class _AppViewState extends State<_AppView> {
   @override
   Widget build(BuildContext context) {
     final themeMode = context.read<ThemeModeService>();
-    return _ConnectivityOverlay(
-      child: MaterialApp.router(
+    return ListenableBuilder(
+      listenable: themeMode,
+      builder: (context, _) => MaterialApp.router(
         title: Strings.appName,
         scaffoldMessengerKey: _messenger,
         theme: AppTheme.light(),
@@ -198,13 +201,19 @@ class _AppViewState extends State<_AppView> {
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         routerConfig: _router,
-        builder: kDemo
-            ? (context, child) => Banner(
-                message: 'MODE D\u00c9MO',
-                location: BannerLocation.topEnd,
-                child: child,
-              )
-            : null,
+        // Inside the app: the banner needs Directionality, Theme and Material.
+        builder: (context, child) {
+          final page = child ?? const SizedBox.shrink();
+          return _ConnectivityOverlay(
+            child: kDemo
+                ? Banner(
+                    message: 'MODE D\u00c9MO',
+                    location: BannerLocation.topEnd,
+                    child: page,
+                  )
+                : page,
+          );
+        },
       ),
     );
   }
@@ -254,23 +263,28 @@ class _ConnectivityOverlayState extends State<_ConnectivityOverlay> {
           top: 0,
           left: 0,
           right: 0,
-          child: Container(
+          child: Material(
             color: Colors.amber,
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.cloud_off, size: 16, color: Colors.black87),
-                SizedBox(width: 8),
-                Text(
-                  'Hors ligne \u2014 vous sont d\u00e9connect\u00e9(e)',
-                  style: TextStyle(
-                    color: Colors.black87,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
-                  ),
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.cloud_off, size: 16, color: Colors.black87),
+                    SizedBox(width: 8),
+                    Text(
+                      'Hors ligne \u2014 vous \u00eates d\u00e9connect\u00e9(e)',
+                      style: TextStyle(
+                        color: Colors.black87,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),

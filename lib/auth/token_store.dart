@@ -37,7 +37,8 @@ class TokenStore {
   Future<String?> read() async {
     try {
       final value = await _storage.read(key: _tokenKey);
-      if (kDebugMode) log('TokenStore.read: $value');
+      // Never log the token itself.
+      if (kDebugMode) log('TokenStore.read: found=${value != null}');
       return value;
     } on Object {
       if (kDebugMode) log('TokenStore.read: failed');
@@ -49,7 +50,7 @@ class TokenStore {
   Future<String?> readUsername() async {
     try {
       final value = await _storage.read(key: _usernameKey);
-      if (kDebugMode) log('TokenStore.readUsername: $value');
+      if (kDebugMode) log('TokenStore.readUsername: found=${value != null}');
       return value;
     } on Object {
       if (kDebugMode) log('TokenStore.readUsername: failed');
@@ -71,6 +72,8 @@ class TokenStore {
   }
 
   /// Saves the token, the username and the remember-me flag of a new session.
+  /// Throws when storage fails: every call needs the saved token, so a login
+  /// that was not saved must not look like a success.
   Future<void> write({
     required String token,
     required String username,
@@ -80,9 +83,10 @@ class TokenStore {
       await _storage.write(key: _tokenKey, value: token);
       await _storage.write(key: _usernameKey, value: username);
       await _storage.write(key: _rememberMeKey, value: rememberMe.toString());
-      if (kDebugMode) log('TokenStore.write: saved for $username');
+      if (kDebugMode) log('TokenStore.write: saved');
     } on Object {
       if (kDebugMode) log('TokenStore.write: failed');
+      rethrow;
     }
   }
 
@@ -103,7 +107,7 @@ class TokenStore {
   Future<void> cacheCustomerName(String senderId, String name) async {
     try {
       await _storage.write(key: '${_nameCacheKey}$senderId', value: name);
-      if (kDebugMode) log('TokenStore.cacheCustomerName: $senderId -> $name');
+      if (kDebugMode) log('TokenStore.cacheCustomerName: saved');
     } on Object {
       if (kDebugMode) log('TokenStore.cacheCustomerName: failed');
     }
@@ -113,7 +117,8 @@ class TokenStore {
   Future<String?> readCustomerName(String senderId) async {
     try {
       final value = await _storage.read(key: '${_nameCacheKey}$senderId');
-      if (kDebugMode) log('TokenStore.readCustomerName: $senderId -> $value');
+      if (kDebugMode)
+        log('TokenStore.readCustomerName: found=${value != null}');
       return value;
     } on Object {
       if (kDebugMode) log('TokenStore.readCustomerName: failed');

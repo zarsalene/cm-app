@@ -551,7 +551,7 @@ class _BubbleEntry extends StatelessWidget {
 
     return Column(
       children: [
-        if (newDay) _DayChip(label: _dayLabel(at!)),
+        if (newDay) _DayChip(label: _dayLabel(at)),
         Padding(
           padding: EdgeInsets.only(
             top: groupedWithPrevious ? 2 : AppSpacing.vertical12,

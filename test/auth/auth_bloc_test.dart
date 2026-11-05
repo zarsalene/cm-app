@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:bloc_test/bloc_test.dart';
 import 'package:cm_app/api/cm_api.dart';
 import 'package:cm_app/auth/auth_bloc.dart';
 import 'package:cm_app/auth/token_store.dart';
 import 'package:cm_app/push/push_service.dart';
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
@@ -46,6 +49,19 @@ void main() {
           LoginFailure('Identifiant ou mot de passe incorrect'),
         ],
       );
+    });
+
+    group('storage failures', () {
+      test('a stuck remember-me read still ends the splash', () {
+        fakeAsync((async) {
+          when(store.readRememberMe)
+              .thenAnswer((_) => Completer<bool>().future);
+          final bloc = AuthBloc(api, store, push)..add(const AuthStarted());
+          async.elapse(const Duration(seconds: 6));
+          expect(bloc.state, const Unauthenticated());
+          unawaited(bloc.close());
+        });
+      });
     });
 
     group('$SessionExpired', () {

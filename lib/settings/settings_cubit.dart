@@ -98,8 +98,9 @@ class SettingsCubit extends Cubit<SettingsState> {
         await push.unsubscribe();
       }
     } on Object {
+      // Fire-and-forget from the switch: a rethrow would be an unhandled
+      // error. The switch snaps back instead.
       emit(state.copyWith(notificationsEnabled: !enabled));
-      rethrow;
     }
   }
 
